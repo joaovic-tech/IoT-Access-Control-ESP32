@@ -3,20 +3,33 @@
 > [!NOTE]
 > Aqui terá toda as informações de como foi desenvolvido o projeto IoT - Reconhecimento facial do meu TCC
 
-[08/02/2026 - domingo]: Ontem (07/02/2026) sábado chegou o último dispositivo, o ESP32-CAM. Como hoje irei descansar minha mente segunda-feira irei dar os passos para a construção do projeto pesquisando em fóruns, blogs e até por vídeos para entender melhor todos os dispositivos para que serve e como devo conectá-los e programá-los.
+[08/02/2026 - domingo]: Ontem (07/02/2026) sábado chegou o último dispositivo, o ESP32-CAM. hoje vamos dar iniciativa nas pesquisas sobre todos os dispositivos para entender melhor para que serve e como devo conectá-los e programá-los.
 
-**Perguntas para cada componente:**
+**Padrão de perguntas para cada componente:**
 
-- Oque é?
-- Oque cada parte do componente faz?
-- Para que serve? (sua utilidade):
-- Onde deve ser usado?
-- Quais outros componentes são compatíveis com (nome_dispositivo)?
+1. Oque é?
+2. Oque cada parte do componente é?
+3. Para que serve? (sua utilidade):
+4. Onde deve ser usado?
+5. Quais outros componentes são compatíveis com (nome_dispositivo)?
 
-**Perguntas globais**
+**perguntas globais**
 
 - Onde deve ser programado (IDE)?
 - Posso ser usado outra linguagem e depois compilar para a original (exemplo de pythop para arduino)?
+
+
+### O que fiz hoje
+
+1. Encontrei um site para simular meus dipositivos chamado [wokwi.](https://wokwi.com/)
+2. Entrei nesse [vídeo](https://www.youtube.com/watch?v=mdaM53qIYgk&t=78s) e segui o tutorial. (não compactua com o escopo do meu projeto)
+3. Imagem do sensor pir
+
+![Imagem do sensor pir](./images/sensor-pir.jpg)
+
+4. até o momento percebi que o meu MB serve para passar os codigos e vou fazer as conexão de tudo feito depois porem ainda não entendi como fazer isso, vou deixar para o próximo dia
+
+horário do termino: 20:26
 
 --------
 
