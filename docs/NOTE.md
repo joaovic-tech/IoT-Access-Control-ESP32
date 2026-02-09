@@ -35,6 +35,14 @@ horário do termino: 20:26
 
 [09/02/2026 - segunda]:
 
+1. Conectei o dispositivo ao PC (após 1 hora de tentativas).
+2. Realizei o teste inicial na placa **ESP32-CAM-MB** subindo um código para alternar o LED embutido a cada 2 segundos.
+3. Configurei o **ESP32-CAM** na rede local utilizando o exemplo `CameraWebServer`.
+4. Obtive imagens em tempo real acessando o IP local do dispositivo.
+
+![Imagem de teste do projeto](./images/teste_01.jpg)
+
+
 --------
 
 [10/02/2026 - terça]:
