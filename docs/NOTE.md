@@ -47,6 +47,47 @@ horário do termino: 20:26
 
 [10/02/2026 - terça]:
 
+### Resumo
+
+Hoje, às 17:17, tive um resultado acima do esperado: consegui fazer com que o dispositivo capturasse uma foto ao detectar movimento pelo **sensor PIR** e a enviasse automaticamente para o **Telegram**, por meio do bot `SecurityHomeJX_bot` (criado também hoje).
+
+> [!NOTE]
+> Isso representa um grande avanço, pois antes eu já estava considerando comprar equipamentos adicionais para concluir o projeto sem passar pela etapa de prototipagem.
+
+### O que fiz
+
+1. Preparei 3 fios (vermelho, azul e preto), cortando uma das pontas de cada um para expor o cobre.
+2. Conectei os fios ao **Sensor PIR** conforme a tabela abaixo.
+3. Conectei a outra extremidade dos fios (lado intacto) ao **ESP32-CAM-MB**.
+4. Criei o bot `SecurityHomeJX_bot` no Telegram para receber as fotos capturadas.
+
+### Conexões
+
+#### Sensor PIR → Fios
+
+| Pino do Sensor | Fio         |
+| :---:          | :---:       |
+| ***VCC***      | Vermelho    |
+| ***OUT***      | Azul        |
+| ***GND***      | Preto       |
+
+#### ESP32-CAM-MB → Fios
+
+| Pino da Placa  | Sinal (Fio) |
+| :---:          | :---:       |
+| ***5V***       | VCC (Vermelho) |
+| ***GND***      | GND (Preto)    |
+| ***GPIO 13***  | OUT (Azul)     |
+
+> A montagem ficou no estilo "sanduíche" — uma gambiarra criativa com os componentes disponíveis. 🛠️
+
+### Protótipo Final
+
+| Protótipo - Final | ESP32-CAM e ESP32-CAM-MB (adaptado) | Sensor PIR (adaptado) |
+| :---: | :---: | :---: |
+| ![Vista Frontal](./images/prototipo_final.jpg) | ![Vista Lateral](./images/placa_adaptada.jpg) | ![Detalhe Conexões](./images/sensor_pir_adaptado.jpg) |
+
+
 --------
 
 [11/02/2026 - quarta]:
