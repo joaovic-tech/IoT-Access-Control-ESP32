@@ -18,7 +18,6 @@
 - Onde deve ser programado (IDE)?
 - Posso ser usado outra linguagem e depois compilar para a original (exemplo de pythop para arduino)?
 
-
 ### O que fiz hoje
 
 1. Encontrei um site para simular meus dipositivos chamado [wokwi.](https://wokwi.com/)
@@ -31,7 +30,7 @@
 
 horário do termino: 20:26
 
---------
+---
 
 [09/02/2026 - segunda]:
 
@@ -42,8 +41,7 @@ horário do termino: 20:26
 
 ![Imagem de teste do projeto](./images/teste_01.jpg)
 
-
---------
+---
 
 [10/02/2026 - terça]:
 
@@ -65,44 +63,36 @@ Hoje, às 17:17, tive um resultado acima do esperado: consegui fazer com que o d
 
 #### Sensor PIR → Fios
 
-| Pino do Sensor | Fio         |
-| :---:          | :---:       |
-| ***VCC***      | Vermelho    |
-| ***OUT***      | Azul        |
-| ***GND***      | Preto       |
+| Pino do Sensor |   Fio    |
+| :------------: | :------: |
+|   **_VCC_**    | Vermelho |
+|   **_OUT_**    |   Azul   |
+|   **_GND_**    |  Preto   |
 
 #### ESP32-CAM-MB → Fios
 
-| Pino da Placa  | Sinal (Fio) |
-| :---:          | :---:       |
-| ***5V***       | VCC (Vermelho) |
-| ***GND***      | GND (Preto)    |
-| ***GPIO 13***  | OUT (Azul)     |
+| Pino da Placa |  Sinal (Fio)   |
+| :-----------: | :------------: |
+|   **_5V_**    | VCC (Vermelho) |
+|   **_GND_**   |  GND (Preto)   |
+| **_GPIO 13_** |   OUT (Azul)   |
 
 > A montagem ficou no estilo "sanduíche" — uma gambiarra criativa com os componentes disponíveis. 🛠️
 
 ### Protótipo Final
 
-| Protótipo - Final | ESP32-CAM e ESP32-CAM-MB (adaptado) | Sensor PIR (adaptado) |
-| :---: | :---: | :---: |
+|               Protótipo - Final                |      ESP32-CAM e ESP32-CAM-MB (adaptado)      |                 Sensor PIR (adaptado)                 |
+| :--------------------------------------------: | :-------------------------------------------: | :---------------------------------------------------: |
 | ![Vista Frontal](./images/prototipo_final.jpg) | ![Vista Lateral](./images/placa_adaptada.jpg) | ![Detalhe Conexões](./images/sensor_pir_adaptado.jpg) |
 
+---
 
---------
+[23/02/2026 - segunda]:
 
-[11/02/2026 - quarta]:
+> Irei agora criar um servidor/api em python onde recebe via POST um imagem.
 
---------
+---
 
-[12/02/2026 - quinta]:
-
---------
-
-[13/02/2026 - sexta]:
-
---------
-
-[14/02/2026 - sábado]:
-
---------
-
+[12/02/2026 - quinta]: --------
+[13/02/2026 - sexta]: --------
+[14/02/2026 - sábado]: --------
