@@ -1,17 +1,15 @@
-# ARTIGO CIENTÍFICO ABNT
-
-**Título:** INTERNET DAS COISAS (IOT) E INTELIGÊNCIA ARTIFICIAL APLICADA À DETECÇÃO E CLASSIFICAÇÃO DE ACESSOS EM AMBIENTES PÚBLICOS E PRIVADOS
+# INTERNET DAS COISAS (IOT) E INTELIGÊNCIA ARTIFICIAL APLICADA À DETECÇÃO E CLASSIFICAÇÃO DE ACESSOS EM AMBIENTES PÚBLICOS E PRIVADOS
 
 **Autoria:**
 ALVES, João Victor Carvalho¹
 
-¹Graduando em Engenharia de Software, [Instituição]. E-mail: [email]@[dominio].com
+¹Graduando em Engenharia de Software, [Instituição: Centro Universitário Internacional (Uninter)]. E-mail: [contato@joaovic.tech]
 
 ---
 
 ## RESUMO
 
-Este artigo expõe o desenvolvimento, a fundamentação teórica e a análise crítica de um sistema automatizado para monitoramento e controle de acessos, integrando as tecnologias de Internet das Coisas (IoT) e Inteligência Artificial (IA). A proposta nasce da imperativa necessidade de superar as limitações intrínsecas aos modelos tradicionais de vigilância, que dependem majoritariamente da observação humana — um processo sujeito a falhas cognitivas, fadiga perceptiva e omissões involuntárias. O sistema concebido utiliza um dispositivo IoT de baixo custo, fundamentado no microcontrolador ESP32-CAM, que opera em conjunto com sensores de movimento PIR e módulos de captura de imagem OV2640. A arquitetura da solução adota um modelo híbrido de processamento, onde a captura de dados ocorre na borda (edge) e o processamento analítico pesado é delegado a um servidor local ou em nuvem, executando algoritmos avançados de Visão Computacional para detecção e reconhecimento facial. Este estudo detalha não apenas a execução prática e a arquitetura de hardware e software, mas também discute profundamente as métricas de desempenho (latência, taxas de falso positivo/negativo) e as implicações jurídicas sob a égide da Lei Geral de Proteção de Dados (LGPD) no Brasil. Os resultados demonstram que a automação da segurança patrimonial, quando implementada com rigor técnico e conformidade legal, oferece uma alternativa robusta, escalável e economicamente viável para a proteção de ambientes residenciais, corporativos e educacionais.
+Este artigo expõe o desenvolvimento, a fundamentação teórica e a análise crítica de um sistema automatizado para monitoramento e controle de acessos, integrando as tecnologias de Internet das Coisas (IoT) e Inteligência Artificial (IA). A proposta nasce da imperativa necessidade de superar as limitações intrínsecas aos modelos tradicionais de vigilância, que dependem majoritariamente da observação humana — um processo sujeito a falhas cognitivas, fadiga perceptiva e omissões involuntárias. O sistema concebido utiliza um dispositivo IoT de baixo custo, fundamentado no microcontrolador ESP32-CAM, que opera em conjunto com sensores de movimento PIR e módulos de captura de imagem OV2640. A arquitetura da solução adota um modelo híbrido de processamento, onde a captura de dados ocorre na borda (*edge*) e o processamento analítico pesado é delegado a um servidor local ou em nuvem, executando algoritmos avançados de Visão Computacional para detecção e reconhecimento facial. Este estudo detalha não apenas a execução prática e a arquitetura de hardware e software, mas também discute profundamente as métricas de desempenho (latência, taxas de falso positivo/negativo) e as implicações jurídicas sob a égide da Lei Geral de Proteção de Dados (LGPD) no Brasil. Os resultados demonstram que a automação da segurança patrimonial, quando implementada com rigor técnico e conformidade legal, oferece uma alternativa robusta, escalável e economicamente viável para a proteção de ambientes residenciais, corporativos e educacionais.
 
 **Palavras-chave:** IoT; IA; Segurança Eletrônica; Monitoramento Automatizado; Reconhecimento de Imagens.
 
@@ -27,43 +25,17 @@ This article presents the development, theoretical foundation, and critical anal
 
 ## 1 INTRODUÇÃO
 
-A segurança de ambientes físicos, sejam eles públicos ou privados, tem passado por uma transformação paradigmática nas últimas décadas. Historicamente dependente de barreiras físicas estáticas e da vigilância humana constante, o setor de segurança enfrenta agora o desafio de integrar tecnologias digitais emergentes para lidar com ameaças cada vez mais complexas e dinâmicas. A convergência entre a conectividade onipresente da Internet das Coisas (Internet of Things - IoT) e a capacidade analítica da Inteligência Artificial (IA) oferece uma oportunidade sem precedentes para redefinir os conceitos de monitoramento e controle de acesso.
+A segurança de ambientes físicos, sejam eles públicos ou privados, tem passado por uma transformação paradigmática nas últimas décadas. Historicamente dependente de barreiras físicas estáticas e da vigilância humana constante, o setor de segurança enfrenta agora o desafio de integrar tecnologias digitais emergentes para lidar com ameaças cada vez mais complexas e dinâmicas. A convergência entre a conectividade onipresente da Internet das Coisas (*Internet of Things* - IoT) e a capacidade analítica da Inteligência Artificial (IA) oferece uma oportunidade sem precedentes para redefinir os conceitos de monitoramento e controle de acesso.
 
-### 1.1 Apresentação do Tema
+Este trabalho enquadra-se na Revolução Industrial 4.0, onde a digitalização dos processos físicos permite a criação de ambientes inteligentes (*smart environments*). O tema central é a aplicação de sistemas embarcados conectados e algoritmos de aprendizado de máquina para automatizar a detecção, identificação e classificação de indivíduos em pontos de acesso. Diferentemente dos sistemas de Circuito Fechado de Televisão (CFTV) tradicionais, que apenas registram eventos para análise forense posterior, a solução proposta busca uma abordagem proativa: identificar e classificar o acesso em tempo real, permitindo uma resposta imediata a potenciais riscos.
 
-Este trabalho enquadra-se na Revolução Industrial 4.0, onde a digitalização dos processos físicos permite a criação de ambientes inteligentes (smart environments). O tema central é a aplicação de sistemas embarcados conectados e algoritmos de aprendizado de máquina para automatizar a detecção, identificação e classificação de indivíduos em pontos de acesso. Diferentemente dos sistemas de Circuito Fechado de Televisão (CFTV) tradicionais, que apenas registram eventos para análise forense posterior, a solução proposta busca uma abordagem proativa: identificar e classificar o acesso em tempo real, permitindo uma resposta imediata a potenciais riscos.
+A problemática central que motiva este estudo reside na falibilidade humana inerente aos processos de vigilância tradicionais. Em ambientes como escolas, condomínios residenciais e empresas, a segurança depende frequentemente de operadores que monitoram múltiplas telas de vídeo simultaneamente. Pesquisas no campo da psicologia cognitiva e ergonomia indicam que a capacidade de manter a atenção sustentada em tarefas de monitoramento visual degrada-se rapidamente. Estudos clássicos, como os citados por Tickner e Poulton, demonstram que após apenas 20 minutos de observação contínua, a taxa de detecção de eventos em telas de vigilância pode cair drasticamente, com operadores perdendo até 95% das atividades relevantes ou suspeitas. Além da fadiga, existe o problema da cegueira inatencional, onde o observador, focado em uma tarefa ou distraído por outra, falha em perceber eventos inesperados, mesmo que estes ocorram em seu campo visual direto. Em um cenário de controle de acesso, isso significa que indivíduos não autorizados podem transitar por portarias ou corredores sem serem notados, comprometendo a integridade física de pessoas e a segurança de ativos patrimoniais.
 
-### 1.2 Problematização
+Diante deste cenário, este trabalho propõe o desenvolvimento e a análise de um dispositivo IoT integrado a um sistema de IA, capaz de monitorar entradas e saídas de forma autônoma. O objetivo geral é criar um protótipo funcional que realize a detecção de movimento, captura de imagens e classificação automática dos acessos entre conhecidos (autorizados) e desconhecidos (potenciais ameaças), enviando notificações em tempo real aos responsáveis. A proposta visa demonstrar que é possível elevar o nível de segurança e reduzir as falhas humanas através da automação tecnológica de baixo custo. Do ponto de vista econômico, sistemas de segurança biométrica comerciais costumam ter custos elevados, proibitivos para pequenas empresas ou residências populares. A utilização de hardware acessível como o ESP32-CAM democratiza o acesso a tecnologias de ponta. Do ponto de vista social e de segurança, a automação reduz o tempo de resposta a incidentes e mitiga o erro humano, proporcionando um monitoramento ininterrupto que não sofre de fadiga ou distração. Tecnicamente, o projeto justifica-se pela exploração da integração entre sistemas embarcados limitados e o processamento em borda ou servidor, um desafio relevante na engenharia de computação atual.
 
-A problemática central que motiva este estudo reside na falibilidade humana inerente aos processos de vigilância tradicionais. Em ambientes como escolas, condomínios residenciais e empresas, a segurança depende frequentemente de operadores que monitoram múltiplas telas de vídeo simultaneamente. Pesquisas no campo da psicologia cognitiva e ergonomia indicam que a capacidade de manter a atenção sustentada em tarefas de monitoramento visual degrada-se rapidamente.
+Para concretizar a proposta, foram delineados os seguintes objetivos específicos: fundamentar teoricamente os conceitos de IoT, IA, Visão Computacional e as normas da LGPD aplicáveis; desenvolver a arquitetura de hardware utilizando o módulo ESP32-CAM e sensores PIR para detecção de presença eficiente energeticamente; implementar o *firmware* de controle para captura de imagens e comunicação via protocolos web (MQTT); desenvolver um servidor de processamento utilizando a linguagem Python e a biblioteca OpenCV para detecção e reconhecimento facial; e analisar os resultados obtidos em termos de latência, precisão e viabilidade, discutindo as implicações de segurança e privacidade.
 
-Estudos clássicos, como os citados por Tickner e Poulton, demonstram que após apenas 20 minutos de observação contínua, a taxa de detecção de eventos em telas de vigilância pode cair drasticamente, com operadores perdendo até 95% das atividades relevantes ou suspeitas. Além da fadiga, existe o problema da "cegueira inatencional", onde o observador, focado em uma tarefa ou distraído por outra, falha em perceber eventos inesperados, mesmo que estes ocorram em seu campo visual direto.
-
-Em um cenário de controle de acesso, isso significa que indivíduos não autorizados podem transitar por portarias ou corredores sem serem notados, comprometendo a integridade física de pessoas e a segurança de ativos patrimoniais. A dependência exclusiva do fator humano, portanto, representa uma vulnerabilidade crítica nos sistemas de segurança atuais.
-
-### 1.3 Proposta e Objetivo Geral
-
-Diante deste cenário, este trabalho propõe o desenvolvimento e a análise de um dispositivo IoT integrado a um sistema de IA, capaz de monitorar entradas e saídas de forma autônoma. O objetivo geral é criar um protótipo funcional que realize a detecção de movimento, captura de imagens e classificação automática dos acessos entre "conhecidos" (autorizados) e "desconhecidos" (potenciais ameaças), enviando notificações em tempo real aos responsáveis. A proposta visa demonstrar que é possível elevar o nível de segurança e reduzir as falhas humanas através da automação tecnológica de baixo custo.
-
-### 1.4 Justificativa
-
-A justificativa para este projeto é multifacetada. Do ponto de vista econômico, sistemas de segurança biométrica comerciais costumam ter custos elevados, proibitivos para pequenas empresas ou residências populares. A utilização de hardware acessível como o ESP32-CAM (custando uma fração do preço de câmeras IP industriais) democratiza o acesso a tecnologias de ponta.
-
-Do ponto de vista social e de segurança, a automação reduz o tempo de resposta a incidentes e mitiga o erro humano, proporcionando um monitoramento ininterrupto (24/7) que não sofre de fadiga ou distração. Tecnicamente, o projeto justifica-se pela exploração da integração entre sistemas embarcados limitados e o processamento em borda ou servidor, um desafio relevante na engenharia de computação atual.
-
-### 1.5 Objetivos Específicos
-
-Para concretizar a proposta, foram delineados os seguintes objetivos específicos:
-
-- Fundamentar teoricamente os conceitos de IoT, IA, Visão Computacional e as normas da LGPD aplicáveis;
-- Desenvolver a arquitetura de hardware utilizando o módulo ESP32-CAM e sensores PIR para detecção de presença eficiente energeticamente;
-- Implementar o firmware de controle para captura de imagens e comunicação via protocolos web (HTTP/REST ou MQTT);
-- Desenvolver um servidor de processamento utilizando a linguagem Python e a biblioteca OpenCV para detecção e reconhecimento facial;
-- Analisar os resultados obtidos em termos de latência, precisão e viabilidade, discutindo as implicações de segurança e privacidade.
-
-### 1.6 Estrutura do Trabalho
-
-Este relatório está organizado em cinco seções principais. Após esta introdução, a seção 2 apresenta a Fundamentação Teórica, revisando a literatura sobre os pilares tecnológicos e legais do projeto. A seção 3 Metodologia detalha os materiais, métodos e a implementação prática do sistema. A seção 4, Resultados e Discussões, expõe os dados coletados nos testes e analisa o desempenho do sistema. Por fim, a seção 5 traz as Considerações Finais, sintetizando as conclusões e sugerindo trabalhos futuros.
+Este artigo está organizado em cinco seções. Após esta introdução, a seção 2 apresenta a Fundamentação Teórica, revisando a literatura sobre os pilares tecnológicos e legais do projeto. A seção 3 Metodologia detalha os materiais, métodos e a implementação prática do sistema. A seção 4, Resultados e Discussões, expõe os dados coletados nos testes e analisa o desempenho do sistema. Por fim, a seção 5 traz as Considerações Finais, sintetizando as conclusões e sugerindo trabalhos futuros.
 
 ---
 
@@ -73,33 +45,33 @@ A construção de um sistema de segurança inteligente exige a compreensão prof
 
 ### 2.1 A Revolução da Internet das Coisas (IoT)
 
-A Internet das Coisas (Internet of Things - IoT) não é apenas uma tendência tecnológica, mas uma mudança estrutural na forma como o mundo físico interage com o mundo digital.
+A Internet das Coisas (IoT) não é apenas uma tendência tecnológica, mas uma mudança estrutural na forma como o mundo físico interage com o mundo digital.
 
 #### 2.1.1 Definições e Conceitos Acadêmicos
 
 O termo foi cunhado por Kevin Ashton em 1999, mas o conceito evoluiu significativamente. Segundo Atzori, Iera e Morabito, em seu artigo seminal "The Internet of Things: A Survey" (Atzori et al., 2010), a IoT pode ser compreendida sob três visões: orientada a coisas (focada em sensores e etiquetas RFID), orientada à internet (focada em protocolos IP) e orientada à semântica (focada no significado dos dados). A definição consolidada refere-se a uma infraestrutura de rede global, onde objetos físicos e virtuais são descobertos e integrados de forma transparente.
 
-Dave Evans, em white paper para a Cisco, descreve IoT como o ponto na história onde mais "coisas" ou objetos estavam conectados à Internet do que pessoas, estimando que bilhões de dispositivos estariam interconectados, gerando dados que poderiam "mudar tudo", desde a gestão urbana até a segurança pessoal (Evans, 2011).
+Dave Evans, em *white paper* para a Cisco, descreve IoT como o ponto na história onde mais "coisas" ou objetos estavam conectados à Internet do que pessoas, estimando que bilhões de dispositivos estariam interconectados, gerando dados que poderiam "mudar tudo", desde a gestão urbana até a segurança pessoal (Evans, 2011).
 
 #### 2.1.2 Arquitetura de Sistemas IoT
 
 Para fins de segurança e vigilância, a arquitetura de IoT é geralmente dividida em camadas, conforme descrito na literatura técnica:
 
-**Camada de Percepção (Perception Layer):** É a base física do sistema. Inclui os sensores (como o sensor de movimento PIR HC-SR501) e os dispositivos de captura (câmera OV2640 no ESP32-CAM). Sua função é coletar dados brutos do ambiente e transformá-los em sinais digitais.
+A Camada de Percepção (*Perception Layer*) constitui a base física do sistema, incluindo sensores como o PIR HC-SR501 e dispositivos de captura como a câmera OV2640 no ESP32-CAM. Sua função é coletar dados brutos do ambiente e transformá-los em sinais digitais.
 
-**Camada de Rede (Network/Transport Layer):** Responsável pela transmissão confiável dos dados coletados para o sistema de processamento. Utiliza tecnologias como Wi-Fi, Bluetooth, Zigbee ou LoRaWAN. No contexto deste projeto, o foco é a transmissão de imagens via Wi-Fi (802.11 b/g/n).
+A Camada de Rede (*Network/Transport Layer*) é responsável pela transmissão confiável dos dados coletados para o sistema de processamento, utilizando tecnologias como Wi-Fi, Bluetooth, Zigbee ou LoRaWAN. No contexto deste projeto, o foco é a transmissão de imagens via Wi-Fi.
 
-**Camada de Processamento (Processing Layer):** Onde os dados são armazenados e analisados. Pode ocorrer na nuvem (Cloud Computing) ou na borda (Edge Computing). A computação em borda é crítica para segurança, pois reduz a latência e a dependência de conectividade externa constante.
+A Camada de Processamento (*Processing Layer*) é onde os dados são armazenados e analisados, podendo ocorrer na nuvem (*Cloud Computing*) ou na borda (*Edge Computing*). A computação em borda é crítica para segurança, pois reduz a latência e a dependência de conectividade externa constante.
 
-**Camada de Aplicação (Application Layer):** A interface com o usuário final, onde os alertas são recebidos e as decisões são tomadas (ex: aplicativo móvel ou painel de controle web).
+A Camada de Aplicação (*Application Layer*) representa a interface com o usuário final, onde os alertas são recebidos e as decisões são tomadas, como em aplicativos móveis ou painéis de controle web.
 
 #### 2.1.3 Protocolos de Comunicação: HTTP vs. MQTT
 
 A escolha do protocolo de comunicação é crucial para a eficiência do sistema.
 
-**HTTP (Hypertext Transfer Protocol):** Amplamente utilizado para transmissão de imagens e streaming de vídeo (MJPEG) devido à sua simplicidade e compatibilidade nativa com navegadores web. No entanto, o HTTP possui um overhead (cabeçalho) grande, o que pode aumentar a latência e o consumo de energia em conexões frequentes.
+O protocolo HTTP (*Hypertext Transfer Protocol*) é amplamente utilizado para transmissão de imagens e streaming de vídeo (MJPEG) devido à sua simplicidade e compatibilidade nativa com navegadores web. No entanto, o HTTP possui um *overhead* (cabeçalho) grande, o que pode aumentar a latência e o consumo de energia em conexões frequentes.
 
-**MQTT (Message Queuing Telemetry Transport):** Um protocolo leve do tipo publish-subscribe, ideal para dispositivos com recursos limitados e redes instáveis. Estudos comparativos mostram que o MQTT sobre TCP apresenta menor latência média (aprox. 290ms) e maior estabilidade do que o HTTP (aprox. 342ms) em cenários de IoT (Amirkhanov et al., 2025). Para sistemas de segurança que exigem alertas instantâneos, o MQTT é superior, embora o HTTP seja muitas vezes necessário para o transporte de cargas de dados maiores (como arquivos de imagem completos) em implementações simples.
+O protocolo MQTT (*Message Queuing Telemetry Transport*) é um protocolo leve do tipo *publish-subscribe*, ideal para dispositivos com recursos limitados e redes instáveis. Estudos comparativos mostram que o MQTT sobre TCP apresenta menor latência média (aprox. 290ms) e maior estabilidade do que o HTTP (aprox. 342ms) em cenários de IoT (AMIRKHANOV et al., 2025). Para sistemas de segurança que exigem alertas instantâneos, o MQTT é superior, embora o HTTP seja muitas vezes necessário para o transporte de cargas de dados maiores (como arquivos de imagem completos) em implementações simples.
 
 ### 2.2 Inteligência Artificial e Visão Computacional
 
@@ -113,27 +85,15 @@ No contexto deste projeto, o sistema de segurança é um "agente racional" que p
 
 #### 2.2.2 Processamento Digital de Imagens e Visão Computacional
 
-A Visão Computacional é a subárea da IA que lida com a interpretação de dados visuais. Segundo Gonzalez e Woods em "Processamento Digital de Imagens", o processo de visão computacional pode ser dividido em fases fundamentais:
-
-**Aquisição da Imagem:** Captura pelo sensor OV2640.
-
-**Pré-processamento:** Melhoria da imagem (ajuste de brilho/contraste, conversão para escala de cinza) para facilitar a análise.
-
-**Segmentação:** Isolamento dos objetos de interesse (neste caso, a face) do fundo da imagem.
-
-**Representação e Descrição:** Extração de características (features) que tornam aquele objeto único.
-
-**Reconhecimento e Interpretação:** Atribuição de um rótulo (identidade) ao objeto com base em seus descritores.
+A Visão Computacional é a subárea da IA que lida com a interpretação de dados visuais. Segundo Gonzalez e Woods em "Processamento Digital de Imagens", o processo de visão computacional pode ser dividido em fases fundamentais: aquisição da imagem, que ocorre via captura pelo sensor OV2640; pré-processamento, referente à melhoria da imagem (ajuste de brilho/contraste, conversão para escala de cinza) para facilitar a análise; segmentação, que corresponde ao isolamento dos objetos de interesse (neste caso, a face) do fundo da imagem; representação e descrição, relativa à extração de características (*features*) que tornam aquele objeto único; e reconhecimento e interpretação, que consiste na atribuição de um rótulo (identidade) ao objeto com base em seus descritores.
 
 Richard Szeliski, em "Computer Vision: Algorithms and Applications" (Szeliski, 2010), complementa que os algoritmos modernos de visão dependem fortemente de aprendizado de máquina estatístico para realizar o reconhecimento robusto em ambientes não controlados (variações de luz, pose e expressão).
 
 #### 2.2.3 Algoritmos de Detecção e Reconhecimento Facial
 
-Para a execução prática, é essencial distinguir entre detecção e reconhecimento:
+Para a execução prática, é essencial distinguir entre detecção e reconhecimento. A detecção facial consiste em encontrar onde está o rosto na imagem. O algoritmo Viola-Jones (*Haar Cascades*) é um método clássico, extremamente rápido e leve, adequado para pré-processamento, embora propenso a falsos positivos em cenários complexos. Redes Neurais Convolucionais (CNNs), como o MTCNN ou modelos baseados em YOLO (*You Only Look Once*), oferecem precisão muito superior, detectando faces em diversos ângulos e escalas, mas exigem maior poder computacional.
 
-**Detecção Facial:** Encontrar onde está o rosto na imagem. O algoritmo Viola-Jones (Haar Cascades) é um método clássico, extremamente rápido e leve, adequado para pré-processamento, embora propenso a falsos positivos em cenários complexos. Redes Neurais Convolucionais (CNNs), como o MTCNN ou modelos baseados em YOLO (You Only Look Once), oferecem precisão muito superior, detectando faces em diversos ângulos e escalas, mas exigem maior poder computacional.
-
-**Reconhecimento Facial:** Identificar quem é a pessoa. Métodos tradicionais como Eigenfaces (PCA) e Fisherfaces (LDA) foram amplamente substituídos por modelos de Deep Learning como o FaceNet (Google) ou Dlib (ResNet). O Dlib, por exemplo, mapeia uma face em um vetor de 128 dimensões, onde a distância euclidiana entre vetores corresponde à similaridade facial, alcançando acurácia superior a 99% em benchmarks padrão.
+O reconhecimento facial, por sua vez, busca identificar quem é a pessoa. Métodos tradicionais como *Eigenfaces* (PCA) e *Fisherfaces* (LDA) foram amplamente substituídos por modelos de **Deep Learning** como o FaceNet (Google) ou Dlib (ResNet). O Dlib, por exemplo, mapeia uma face em um vetor de 128 dimensões, onde a distância euclidiana entre vetores corresponde à similaridade facial, alcançando acurácia superior a 99% em *benchmarks* padrão.
 
 ### 2.3 Segurança Eletrônica e Controle de Acesso
 
@@ -145,13 +105,7 @@ A segurança patrimonial baseia-se no conceito de "Defesa em Profundidade" (Defe
 
 #### 2.3.2 Métricas de Desempenho Biométrico
 
-A eficácia de um sistema biométrico é avaliada estatisticamente:
-
-**FAR (False Acceptance Rate):** A probabilidade de o sistema aceitar incorretamente uma pessoa não autorizada. Em segurança, o objetivo primário é minimizar o FAR (tender a zero).
-
-**FRR (False Rejection Rate):** A probabilidade de o sistema rejeitar incorretamente uma pessoa autorizada. Um FRR alto causa inconveniência e frustração ao usuário.
-
-**Curva ROC (Receiver Operating Characteristic):** Representa graficamente a relação entre a taxa de verdadeiros positivos e falsos positivos. O ajuste do limiar de sensibilidade (threshold) do algoritmo de IA move o sistema ao longo desta curva, trocando conveniência (baixo FRR) por segurança (baixo FAR).
+A eficácia de um sistema biométrico é avaliada estatisticamente. O FAR (*False Acceptance Rate*) representa a probabilidade de o sistema aceitar incorretamente uma pessoa não autorizada. Em segurança, o objetivo primário é minimizar o FAR (tender a zero). O FRR (*False Rejection Rate*) representa a probabilidade de o sistema rejeitar incorretamente uma pessoa autorizada. Um FRR alto causa inconveniência e frustração ao usuário. A Curva ROC (*Receiver Operating Characteristic*) representa graficamente a relação entre a taxa de verdadeiros positivos e falsos positivos. O ajuste do limiar de sensibilidade (*threshold*) do algoritmo de IA move o sistema ao longo desta curva, trocando conveniência (baixo FRR) por segurança (baixo FAR).
 
 ### 2.4 Aspectos Legais: A LGPD e o Tratamento de Biometria
 
@@ -184,35 +138,23 @@ Dessa forma, a arquitetura proposta neste trabalho utiliza a Visão Computaciona
 
 ### 3.1 Visão Geral da Arquitetura
 
-A solução proposta foi desenvolvida sobre uma arquitetura híbrida de IoT (Internet das Coisas), dividida em duas camadas principais: a Camada de Borda (Edge Layer), responsável pela captura e transmissão eficiente de dados, e a Camada de Servidor (Server Layer), responsável pelo processamento pesado de Inteligência Artificial e lógica de negócios.
+A solução proposta foi desenvolvida sobre uma arquitetura híbrida de IoT, dividida em duas camadas principais: a Camada de Borda (*Edge Layer*), responsável pela captura e transmissão eficiente de dados, e a Camada de Servidor (*Server Layer*), responsável pelo processamento pesado de Inteligência Artificial e lógica de negócios.
 
 O fluxo do sistema foi projetado para maximizar a eficiência energética e minimizar a latência. O dispositivo de borda (ESP32-CAM) permanece em estado de baixo consumo (Deep Sleep) até que um evento físico seja detectado, momento em que acorda, captura a imagem e a transmite para o servidor via protocolo MQTT.
 
 Sendo assim, o servidor, por sua vez, processa a imagem, identifica o indivíduo e valida as regras de acesso baseadas em contexto (horário e permissões).
 
-A Figura 1 apresenta um diagrama de blocos com as partes principais do projeto.
+A Figura 1 apresenta o protótipo físico final do sistema, demonstrando a montagem e integração dos componentes de hardware.
 
-**Figura 1 - Diagrama de blocos do projeto**
+**Figura 1 - Protótipo físico do sistema IoT**
 
-![Diagrama de blocos do sistema IoT](./docs/images/prototipo_final.jpg)
+![Protótipo físico do sistema IoT](./docs/images/prototipo_final.jpg)
 
 Fonte: O autor (2026).
 
 ### 3.2 Fluxo de Dados e Funcionamento
 
-O funcionamento do sistema segue um diagrama de fluxo linear e determinístico, composto pelas seguintes etapas:
-
-1. **Detecção de Presença:** O sensor PIR (HC-SR501) detecta variação infravermelha no ambiente e envia um sinal HIGH para o pino de Wake-up (GPIO 13) do microcontrolador.
-
-2. **Inicialização e Captura:** O ESP32-CAM desperta do modo Deep Sleep, inicializa o módulo de câmera OV2640 e captura um quadro (frame) em resolução VGA (640x480).
-
-3. **Transmissão:** A imagem é fragmentada em payloads binários e publicada no tópico MQTT `cam/image` através da rede Wi-Fi.
-
-4. **Recepção e Remontagem:** No servidor, um script Python inscrito no tópico recebe os fragmentos, remonta a imagem e a encaminha para o pipeline de IA.
-
-5. **Identificação e Validação:** O sistema extrai o vetor biométrico da face, compara com o banco de dados e, em caso de match positivo, consulta o Motor de Regras (TBAC) para verificar se aquele usuário tem permissão para aquele horário.
-
-6. **Ação:** Baseado na validação, o sistema aciona o relé (abertura de porta) ou registra um alerta de segurança.
+O funcionamento do sistema segue um diagrama de fluxo linear e determinístico, composto pelas seguintes etapas: detecção de presença, onde o sensor PIR (HC-SR501) detecta variação infravermelha no ambiente e envia um sinal HIGH para o pino de *Wake-up* (GPIO 13) do microcontrolador; inicialização e captura, em que o ESP32-CAM desperta do modo *Deep Sleep*, inicializa o módulo de câmera OV2640 e captura um quadro (*frame*) em resolução VGA (640x480); transmissão, quando a imagem é fragmentada em *payloads* binários e publicada no tópico MQTT `cam/image` através da rede Wi-Fi; recepção e remontagem, na qual o servidor, por meio de um *script* Python inscrito no tópico, recebe os fragmentos, remonta a imagem e a encaminha para o *pipeline* de IA; identificação e validação, onde o sistema extrai o vetor biométrico da face, compara com o banco de dados e, em caso de *match* positivo, consulta o Motor de Regras (TBAC) para verificar se aquele usuário tem permissão para aquele horário; e ação, momento em que, baseado na validação, o sistema aciona o relé (abertura de porta) ou registra um alerta de segurança.
 
 ### 3.3 Desenvolvimento do Firmware (Edge)
 
@@ -242,21 +184,15 @@ O servidor de processamento foi implementado em linguagem Python 3.9, escolhida 
 
 #### 3.4.1 Recepção de Dados (MQTT Subscriber)
 
-Utilizou-se a biblioteca `paho-mqtt` para implementar o cliente assinante (subscriber). O sistema opera de forma assíncrona (non-blocking), permitindo que o servidor processe múltiplas requisições de diferentes câmeras simultaneamente sem travamento da thread principal.
+Utilizou-se a biblioteca `paho-mqtt` para implementar o cliente assinante (*subscriber*). O sistema opera de forma assíncrona (*non-blocking*), permitindo que o servidor processe múltiplas requisições de diferentes câmeras simultaneamente sem travamento da *thread* principal.
 
 #### 3.4.2 Pipeline de IA (FaceNet)
 
-O reconhecimento facial utiliza a biblioteca `dlib` com o modelo ResNet pré-treinado. O processo ocorre em três subetapas:
-
-1. **Detecção da face** via HOG (Histogram of Oriented Gradients);
-2. **Alinhamento dos pontos fiduciais**;
-3. **Extração do embedding** (vetor de 128 dimensões).
-
-A comparação é feita pelo cálculo da Distância Euclidiana, com um limiar (threshold) ajustado para 0.6.
+O reconhecimento facial utiliza a biblioteca `dlib` com o modelo ResNet pré-treinado. O processo ocorre em três subetapas: detecção da face via HOG (*Histogram of Oriented Gradients*); alinhamento dos pontos fiduciais; e extração do *embedding* (vetor de 128 dimensões). A comparação é feita pelo cálculo da Distância Euclidiana, com um limiar (*threshold*) ajustado para 0.6.
 
 #### 3.4.3 Motor de Regras e Controle de Acesso (TBAC)
 
-Foi desenvolvido um módulo lógico de Time-Based Access Control (TBAC). Diferente de sistemas passivos, este motor cruza a identidade detectada com uma matriz de permissões JSON `{usuario_id, horarios_permitidos, zonas_autorizadas}`. Se um usuário autorizado for detectado fora de seu turno, o sistema gera um alerta de "Anomalia Contextual" em vez de liberar o acesso.
+Foi desenvolvido um módulo lógico de TBAC (*Time-Based Access Control*). Diferente de sistemas passivos, este motor cruza a identidade detectada com uma matriz de permissões JSON `{usuario_id, horarios_permitidos, zonas_autorizadas}`. Se um usuário autorizado for detectado fora de seu turno, o sistema gera um alerta de "Anomalia Contextual" em vez de liberar o acesso.
 
 ---
 
@@ -364,3 +300,5 @@ Para conversão deste documento para .docx, aplicar as seguintes configurações
 1. Elementos pré-textuais: Título, Autoria, Resumo, Abstract, Palavras-chave/Keywords
 2. Elementos textuais: Introdução, Fundamentação Teórica, Metodologia, Resultados e Discussões, Considerações Finais
 3. Elementos pós-textuais: Referências, Anexos
+nexos
+Referências, Anexos

@@ -87,12 +87,31 @@ Hoje, às 17:17, tive um resultado acima do esperado: consegui fazer com que o d
 
 ---
 
-[23/02/2026 - segunda]:
+[25/03/2026 - quarta]:
+Oque foi feito?
+- Modificação do artigo.
+- Arquitetura (servidor/dispositivo).
 
-> Irei agora criar um servidor/api em python onde recebe via POST um imagem.
+Análise técnica para resolver algumas questões sobre os testes do **prototipo:***
+
+1. **Alta latência:** Por que o HTTP está lento nos testes?
+	1. O `HTTP` é um protocolo `"pesado"` para um ESP32. Para cada foto, ele precisa abrir uma conexão `TCP`, fazer a handshake `TLS` (se for `HTTPS`, como o `Telegram`), enviar cabeçalhos gigantes e depois fechar a conexão. Isso gera a latência que eu percebi. O Wi-Fi do ESP32 não é `"lento"` (suporta 802.11b/g/n), mas o processamento dessa pilha de rede consome muita **CPU** e **RAM**.
+2. MQTT para Imagens: O "Pulo do Gato"
+	1. O MQTT é muito mais rápido porque a conexão fica aberta. Quando o sensor PIR dispara, o ESP32 simplesmente joga os bytes da imagem no tópico, sem burocracia.
+	2. **O desafio:** A biblioteca padrão `PubSubClient` (muito usada no Arduino) tem um buffer padrão de apenas 128 ou 256 bytes. Uma foto VGA tem cerca de 20KB a 30KB.
+	3. **Solução:** Usar uma biblioteca mais moderna como a `AsyncMqttClient`.
+3. Como o Python irar receber isso?
+	1. No lado do servidor, usarei a biblioteca `paho-mqtt`. O fluxo é simples:
+		1. O Python se conecta ao **Broker MQTT** (presisarei de um Mosquitto).
+		2. Ele se "inscreve" no tópico (ex: sala/camera1).
+		3. Quando a imagem chega, o `paho-mqtt` entrega um array de bytes (payload).
+		4. O Python salva esses bytes como um arquivo `.jpg` ou os passa diretamente para o OpenCV/FaceNet.
+4. Proposta de Ação (ATIKA Strategy)
+	1. Antes de escrever mais no artigo, preciso validar o MVP (Minimum Viable Product).
+	2. Preciso escrever um script python (Subscriber) para receber as imagens e as condigurações necessárias para o ESP32 conseguir enviar arquivos maiores que o padrão via MQTT.
+
+	> [!NOTE]
+> Preciso instalar um Broker MQTT (Mosquitto) no pc/servidor para ESP32 e o Python poderem conversar.
+
 
 ---
-
-[12/02/2026 - quinta]: --------
-[13/02/2026 - sexta]: --------
-[14/02/2026 - sábado]: --------
