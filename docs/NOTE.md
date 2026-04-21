@@ -96,20 +96,20 @@ Oque foi feito?
 Análise técnica para resolver algumas questões sobre os testes do **prototipo:***
 
 1. **Alta latência:** Por que o HTTP está lento nos testes?
- 1. O `HTTP` é um protocolo `"pesado"` para um ESP32. Para cada foto, ele precisa abrir uma conexão `TCP`, fazer a handshake `TLS` (se for `HTTPS`, como o `Telegram`), enviar cabeçalhos gigantes e depois fechar a conexão. Isso gera a latência que eu percebi. O Wi-Fi do ESP32 não é `"lento"` (suporta 802.11b/g/n), mas o processamento dessa pilha de rede consome muita **CPU** e **RAM**.
-2. MQTT para Imagens: O "Pulo do Gato"
- 1. O MQTT é muito mais rápido porque a conexão fica aberta. Quando o sensor PIR dispara, o ESP32 simplesmente joga os bytes da imagem no tópico, sem burocracia.
- 2. **O desafio:** A biblioteca padrão `PubSubClient` (muito usada no Arduino) tem um buffer padrão de apenas 128 ou 256 bytes. Uma foto VGA tem cerca de 20KB a 30KB.
- 3. **Solução:** Usar uma biblioteca mais moderna como a `AsyncMqttClient`.
-3. Como o Python irar receber isso?
- 1. No lado do servidor, usarei a biblioteca `paho-mqtt`. O fluxo é simples:
-  1. O Python se conecta ao **Broker MQTT** (presisarei de um Mosquitto).
-  2. Ele se "inscreve" no tópico (ex: sala/camera1).
-  3. Quando a imagem chega, o `paho-mqtt` entrega um array de bytes (payload).
-  4. O Python salva esses bytes como um arquivo `.jpg` ou os passa diretamente para o OpenCV/FaceNet.
-4. Proposta de Ação (ATIKA Strategy)
- 1. Antes de escrever mais no artigo, preciso validar o MVP (Minimum Viable Product).
- 2. Preciso escrever um script python (Subscriber) para receber as imagens e as condigurações necessárias para o ESP32 conseguir enviar arquivos maiores que o padrão via MQTT.
+1. O `HTTP` é um protocolo `"pesado"` para um ESP32. Para cada foto, ele precisa abrir uma conexão `TCP`, fazer a handshake `TLS` (se for `HTTPS`, como o `Telegram`), enviar cabeçalhos gigantes e depois fechar a conexão. Isso gera a latência que eu percebi. O Wi-Fi do ESP32 não é `"lento"` (suporta 802.11b/g/n), mas o processamento dessa pilha de rede consome muita **CPU** e **RAM**.
+1. MQTT para Imagens: O "Pulo do Gato"
+1. O MQTT é muito mais rápido porque a conexão fica aberta. Quando o sensor PIR dispara, o ESP32 simplesmente joga os bytes da imagem no tópico, sem burocracia.
+1. **O desafio:** A biblioteca padrão `PubSubClient` (muito usada no Arduino) tem um buffer padrão de apenas 128 ou 256 bytes. Uma foto VGA tem cerca de 20KB a 30KB.
+1. **Solução:** Usar uma biblioteca mais moderna como a `AsyncMqttClient`.
+1. Como o Python irar receber isso?
+1. No lado do servidor, usarei a biblioteca `paho-mqtt`. O fluxo é simples:
+1. O Python se conecta ao **Broker MQTT** (presisarei de um Mosquitto).
+1. Ele se "inscreve" no tópico (ex: sala/camera1).
+1. Quando a imagem chega, o `paho-mqtt` entrega um array de bytes (payload).
+1. O Python salva esses bytes como um arquivo `.jpg` ou os passa diretamente para o OpenCV/FaceNet.
+1. Proposta de Ação (ATIKA Strategy)
+1. Antes de escrever mais no artigo, preciso validar o MVP (Minimum Viable Product).
+1. Preciso escrever um script python (Subscriber) para receber as imagens e as condigurações necessárias para o ESP32 conseguir enviar arquivos maiores que o padrão via MQTT.
 
  > [!NOTE]
 >
@@ -117,3 +117,29 @@ Análise técnica para resolver algumas questões sobre os testes do **prototipo
 
 ---
 
+[16/04/2026 - quinta]:
+
+O que fiz hoje
+
+1. **Configuração do Ambiente:**
+    - Criação de um ambiente virtual Python (`.venv`) para gerenciar as dependências do projeto de forma isolada.
+    - Instalação da biblioteca `paho-mqtt` no servidor.
+2. **Desenvolvimento do Servidor MQTT (Python):**
+    - Criação do script `src/server/mqtt_receiver.py` que atua como **Subscriber**.
+    - Lógica implementada para receber o payload binário da imagem e salvá-lo automaticamente no diretório `docs/images/received/`.
+3. **Validação do MVP:**
+    - Criação do script `src/server/publisher_test.py` para simular o comportamento do ESP32 enviando imagens via MQTT, garantindo que o servidor Python está processando os dados corretamente.
+
+### Próximos Passos
+
+- Instalar e configurar o Broker **Mosquitto** no PC local.
+- Modificar o código do **ESP32-CAM** para enviar as fotos via MQTT em vez de HTTP, utilizando a biblioteca `AsyncMqttClient` conforme planejado na estratégia técnica.
+- Integrar o servidor Python com o **OpenCV** para reconhecimento facial.
+
+horário do termino: 15:45
+
+---
+
+[21/04/2026]:
+
+Criando servidor mqtt e alterando código do dispoitov passando de conexão via telegram para meu servidor broker (mqtt)

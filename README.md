@@ -16,6 +16,7 @@ Este repositório contém os artefatos de código e documentação técnica do m
 O projeto propõe uma solução de **Segurança Patrimonial Inteligente** utilizando IoT e Inteligência Artificial. Diferente de sistemas tradicionais que apenas gravam imagens, este sistema utiliza **Computação na Borda (Edge Computing)** e **Análise Contextual** para detectar, identificar e decidir sobre a permissão de acesso em tempo real.
 
 ### 🚀 Funcionalidades Principais
+
 - **Detecção de Movimento (PIR):** Ativação inteligente para economia de energia e banda (Wake-on-Event).
 - **Reconhecimento Facial:** Validação de identidade utilizando biblioteca `face_recognition` e OpenCV.
 - **Motor de Regras (TBAC):** Controle de acesso baseado em horários e grupos (ex: Aluno Fundamental vs. Médio).
@@ -37,4 +38,5 @@ O artigo completo detalhando a metodologia, resultados e fundamentação teóric
 - Link: [Pendente - Aguardando Publicação](#)
 
 ## 📝 Licença
-Este projeto é licenciado sob a licença [GPL-3.0 license](LICENSE).
+
+Este projeto é licenciado sob a licença [GPL-3.0 license](./LICENSE).
