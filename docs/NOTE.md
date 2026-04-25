@@ -1,4 +1,4 @@
-# Anotações & Progresso do Projeto
+## Anotações & Progresso do Projeto
 
 > [!NOTE]
 > Aqui terá toda as informações de como foi desenvolvido o projeto IoT - Reconhecimento facial do meu TCC
