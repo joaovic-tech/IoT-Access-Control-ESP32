@@ -140,6 +140,14 @@ horário do termino: 15:45
 
 ---
 
-[21/04/2026]:
+[09/05/2026]:
 
-Criando servidor mqtt e alterando código do dispoitov passando de conexão via telegram para meu servidor broker (mqtt)
+Acabei perdendo meu servidor MQTT, mas em troca descobri a causa de falsas detecções de movimento que tinha em meu projeto.
+
+O conclito de Pinos (Causa dos disparos falsos)
+
+No meu código `CameraWebServer.ino` tinhe definido o PIR_PIN como 3 porem como eu tinha colocado no dispositivo o GPIO 13 -> OUT (Azul) um problema.
+
+O problema: O GPIO 3 no ESP32-CAM é o pino RX0 (Recepção Serial). Quando eu iniciava a comunicação serial (Serial.begin(115200)), qualquer ruído elétrico na linha serial ou dados chegando pelo cabo USB são interpretados pelo código como "movimento". Isso explica por que ele envia fotos mesmo sem ninguém no quarto.
+
+OBS: Ainda estou tendo problema de latência mas agora estou totalmente pronto para migrar para MQTT.
