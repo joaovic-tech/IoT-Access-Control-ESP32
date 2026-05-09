@@ -3,7 +3,8 @@
 *CLAUDE*
 *GEMINI*
 *.odt
-*.pdf
 artigo.md
 .obsidian
+input.md
 output.md
+*.pdf
