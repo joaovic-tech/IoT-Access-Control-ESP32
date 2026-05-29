@@ -1,0 +1,5 @@
+paho-mqtt
+face_recognition
+face_recognition_models @ git+https://github.com/ageitgey/face_recognition_models
+setuptools<81
+opencv-python-headless

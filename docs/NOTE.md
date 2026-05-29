@@ -151,3 +151,39 @@ No meu código `CameraWebServer.ino` tinhe definido o PIR_PIN como 3 porem como 
 O problema: O GPIO 3 no ESP32-CAM é o pino RX0 (Recepção Serial). Quando eu iniciava a comunicação serial (Serial.begin(115200)), qualquer ruído elétrico na linha serial ou dados chegando pelo cabo USB são interpretados pelo código como "movimento". Isso explica por que ele envia fotos mesmo sem ninguém no quarto.
 
 OBS: Ainda estou tendo problema de latência mas agora estou totalmente pronto para migrar para MQTT.
+
+---
+
+[12/05/2026 - terça]:
+
+Arquitetura MQTT implementada.
+
+Status:
+
+1. `code/server` -> Servidor MQTT
+
+Resultados:
+
+1. Resposta de envio de imagens para a pasta `/code/server/uploads_mqtt/` de 5 a 10 segundo após a detecção de movimento.
+
+---
+
+[29/05/2026 - sexta]:
+
+Reconhecimento facial implementado e validado com sucesso.
+
+### O que foi feito
+
+1. Removido todo o código HTTP/FastAPI (`main.py` antigo e `mqtt_receiver.py`), consolidando tudo em um único `main.py` focado 100% no protocolo MQTT.
+2. Integração da biblioteca `face_recognition` (baseada em `dlib`) para reconhecimento facial.
+3. Criação do diretório `known_faces/` com 10 fotos cadastradas (frente, lados, cima, baixo — com e sem óculos).
+4. Correção de rotação EXIF nas imagens de cadastro (celular salva com orientação 8).
+5. Melhoria na detecção de rostos em imagens de baixa resolução do ESP32-CAM (`number_of_times_to_upsample=2`).
+
+### Resultados
+
+#### Print do teste de reconhecimento
+![Print do teste de reconhecimento](./images/teste-02-detecao.png)
+
+1. 7 de 10 rostos cadastrados foram carregados com sucesso (3 fotos com ângulo muito extremo não foram detectadas).
+2. Reconhecimento facial funcionando em tempo real via MQTT — o sistema identificou corretamente o rosto cadastrado com distâncias entre 0.33 e 0.43.
