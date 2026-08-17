@@ -151,3 +151,22 @@ No meu código `CameraWebServer.ino` tinhe definido o PIR_PIN como 3 porem como 
 O problema: O GPIO 3 no ESP32-CAM é o pino RX0 (Recepção Serial). Quando eu iniciava a comunicação serial (Serial.begin(115200)), qualquer ruído elétrico na linha serial ou dados chegando pelo cabo USB são interpretados pelo código como "movimento". Isso explica por que ele envia fotos mesmo sem ninguém no quarto.
 
 OBS: Ainda estou tendo problema de latência mas agora estou totalmente pronto para migrar para MQTT.
+
+---
+
+[17/08/2026 - segunda]:
+
+### Nova Abordagem: Transmissão de Vídeo em Tempo Real para App Kotlin
+
+Hoje foi tomada a decisão de reformular a arquitetura do projeto: em vez do fluxo anterior com servidor intermediário, implementaremos uma nova ideia onde o **ESP32-CAM transmite o vídeo em tempo real diretamente para um aplicativo Android desenvolvido em Kotlin**.
+
+O aplicativo móvel funcionará como um **painel de controle (dashboard)**, permitindo:
+1. Visualizar o feed de vídeo ao vivo (stream da câmera) com baixa latência.
+2. Enviar comandos de controle diretamente ao ESP32.
+3. Monitorar o status e eventos do dispositivo.
+
+**Ações realizadas hoje:**
+- Criação da branch dedicada: `feature/esp32cam-stream-kotlin-app`.
+- Limpeza dos códigos legados de dispositivo e servidor para reiniciar o desenvolvimento com uma base limpa e focada nessa nova arquitetura.
+- Planejamento do novo firmware para o ESP32-CAM e da estrutura do aplicativo mobile em Kotlin.
+
