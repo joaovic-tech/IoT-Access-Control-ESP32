@@ -415,31 +415,44 @@ def _store_samples(
     person: people_store.Person,
     files: list[UploadFile],
     datas: list[bytes],
-) -> list[str]:
+) -> list[dict[str, Any]]:
     """Valida (1 rosto por amostra), grava e indexa as amostras.
 
     `index_sample` faz a validacao e a indexacao numa passada so: antes o
     servidor codificava a imagem para contar rostos e, no fim do cadastro,
-    recodificava o banco inteiro com `load_known_faces()`. Retorna os avisos
-    das amostras recusadas.
+    recodificava o banco inteiro com `load_known_faces()`.
+
+    Devolve UMA entrada por amostra recusada -- `file`, `faces` e `reason` --
+    para o app poder apontar qual foto caiu e por que. Antes so existia um
+    texto solto em `warnings`, e o app perdia a foto recusada sem avisar.
     """
-    warnings: list[str] = []
+    refused: list[dict[str, Any]] = []
     for upload, data in zip(files, datas):
+        nome = upload.filename or "amostra"
         if not data:
-            warnings.append(f"{upload.filename}: arquivo vazio")
+            refused.append({"file": nome, "faces": 0, "reason": "arquivo vazio"})
             continue
         try:
             faces = face_engine.index_sample(person.id, data)
         except ValueError as exc:
-            warnings.append(f"{upload.filename}: {exc}")
+            refused.append({"file": nome, "faces": 0, "reason": str(exc)})
             continue
         if faces != 1:
-            warnings.append(
-                f"{upload.filename}: {faces} rosto(s) encontrados (esperado exatamente 1)"
+            refused.append(
+                {
+                    "file": nome,
+                    "faces": faces,
+                    "reason": f"{faces} rosto(s) encontrados (esperado exatamente 1)",
+                }
             )
             continue
         people_store.add_sample_bytes(person, data)
-    return warnings
+    return refused
+
+
+def _warning_lines(refused: list[dict[str, Any]]) -> list[str]:
+    """Formato antigo de `warnings`, mantido para nao quebrar quem ja o lia."""
+    return [f"{r['file']}: {r['reason']}" for r in refused]
 
 
 @app.post("/people", status_code=201)
@@ -466,12 +479,13 @@ async def create_person(
     person = people_store.create_person(
         name=name, category=category, rooms=comodos, authorized=authorized
     )
-    warnings = _store_samples(person, files, datas)
+    refused = _store_samples(person, files, datas)
     stats = face_engine.stats()
 
     return {
         "person": person.to_dict(),
-        "warnings": warnings,
+        "warnings": _warning_lines(refused),
+        "refused": refused,
         "min_samples_active": MIN_SAMPLES_ACTIVE,
         "known_people": stats["people"],
         "known_samples": stats["samples"],
@@ -537,9 +551,13 @@ async def add_samples(
             detail=f"Maximo de {MAX_SAMPLES_PER_REQUEST} amostras por requisicao",
         )
     datas = [await f.read() for f in files]
-    warnings = _store_samples(person, files, datas)
+    refused = _store_samples(person, files, datas)
     updated = people_store.get_person(person_id)
-    return {"person": updated.to_dict() if updated else None, "warnings": warnings}
+    return {
+        "person": updated.to_dict() if updated else None,
+        "warnings": _warning_lines(refused),
+        "refused": refused,
+    }
 
 
 class EnrollRequest(BaseModel):

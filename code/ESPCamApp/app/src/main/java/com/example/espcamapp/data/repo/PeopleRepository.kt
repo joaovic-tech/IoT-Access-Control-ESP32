@@ -4,6 +4,7 @@ import com.example.espcamapp.data.model.Person
 import com.example.espcamapp.data.remote.EnrollRequestDto
 import com.example.espcamapp.data.remote.FaceServerApi
 import com.example.espcamapp.data.remote.PersonPatchDto
+import com.example.espcamapp.data.remote.PersonResponseDto
 import com.example.espcamapp.data.remote.toDomain
 import com.example.espcamapp.data.settings.SettingsStore
 import kotlinx.coroutines.flow.first
@@ -20,8 +21,14 @@ data class SampleImage(val fileName: String, val bytes: ByteArray) {
     override fun hashCode(): Int = 31 * fileName.hashCode() + bytes.contentHashCode()
 }
 
-/** Resultado do cadastro: pessoa criada + avisos de amostras recusadas. */
-data class CreatePersonResult(val person: Person?, val warnings: List<String>)
+/**
+ * Amostra recusada pelo servidor, já ligada à foto que a tela tem em mãos
+ * ([fileName] é o mesmo nome enviado no multipart).
+ */
+data class RefusedSample(val fileName: String, val faces: Int, val reason: String)
+
+/** Resultado do cadastro: pessoa criada + as amostras que não entraram. */
+data class CreatePersonResult(val person: Person?, val refused: List<RefusedSample>)
 
 /** CRUD de pessoas no servidor Python de faces. */
 class PeopleRepository(
@@ -70,7 +77,7 @@ class PeopleRepository(
             authorized = authorized.toString().asTextPart(),
             files = samples.toParts()
         )
-        CreatePersonResult(response.person?.toDomain(base), response.warnings)
+        CreatePersonResult(response.person?.toDomain(base), response.refusedSamples())
     }
 
     /** Edição do cadastro: nome, categoria e cômodos liberados. */
@@ -97,7 +104,7 @@ class PeopleRepository(
             url = "$base/people/$personId/samples",
             files = samples.toParts()
         )
-        CreatePersonResult(response.person?.toDomain(base), response.warnings)
+        CreatePersonResult(response.person?.toDomain(base), response.refusedSamples())
     }
 
     suspend fun setAuthorized(personId: String, authorized: Boolean): Result<Person?> =
@@ -139,6 +146,23 @@ class PeopleRepository(
         apiCall { api.health("${serverUrl()}/health").toDomain() }
 
     private companion object {
+        /**
+         * Servidor atualizado manda `refused` (arquivo + rostos + motivo). Um
+         * servidor antigo só manda a linha "arquivo: motivo" em `warnings` —
+         * daí a leitura de reserva, para a tela não ficar sem explicação.
+         */
+        fun PersonResponseDto.refusedSamples(): List<RefusedSample> = when {
+            refused.isNotEmpty() -> refused.map { RefusedSample(it.file, it.faces, it.reason) }
+            else -> warnings.map { linha ->
+                val temNome = linha.contains(": ")
+                RefusedSample(
+                    fileName = if (temNome) linha.substringBefore(": ") else "",
+                    faces = 0,
+                    reason = if (temNome) linha.substringAfter(": ") else linha
+                )
+            }
+        }
+
         val IMAGE_JPEG = "image/jpeg".toMediaType()
         val TEXT_PLAIN = "text/plain".toMediaType()
 

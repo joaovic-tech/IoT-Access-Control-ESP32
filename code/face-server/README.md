@@ -74,6 +74,33 @@ curl -X POST http://localhost:8000/people -F "name=João Victor" -F "category=Mo
 Uma pessoa fica com `status = "ativo"` a partir de `MIN_SAMPLES_ACTIVE`
 amostras (padrão 3); abaixo disso fica `"pendente"`.
 
+### As fotos precisam mostrar o rosto de frente
+
+O detector HOG do dlib só encontra rosto **aproximadamente de frente**. Foto de
+perfil, de queixo erguido ou de cabeça baixa volta com `0 rosto(s) encontrados`
+e a amostra é recusada — medido com 5 fotos da mesma pessoa: as 2 frontais (uma
+delas com o rosto ¾ virado) entraram, e as 3 de ângulo forte foram recusadas em
+qualquer resolução e em qualquer rotação da imagem. Varie **expressão, luz e
+distância**, não o ângulo da cabeça.
+
+O detector `cnn` do dlib acha esses rostos de ângulo, mas leva **166 s por foto**
+nesta CPU (o HOG leva 1,6 s), então não é usado — ficaria muito acima do timeout
+do app.
+
+`POST /people` e `POST /people/{id}/samples` respondem com o que **não** entrou:
+
+```json
+{
+  "person": { "...": "...", "samples": 2 },
+  "warnings": ["foto3.jpg: 0 rosto(s) encontrados (esperado exatamente 1)"],
+  "refused": [{ "file": "foto3.jpg", "faces": 0, "reason": "0 rosto(s) encontrados (esperado exatamente 1)" }]
+}
+```
+
+`refused` é o campo que o app usa para apontar qual foto caiu e por quê;
+`warnings` traz a mesma coisa em texto corrido e continua existindo para não
+quebrar quem já o lia.
+
 Se você copiar imagens direto para `known_faces/<id>/`, recarregue com:
 
 ```bash

@@ -50,6 +50,7 @@ Se a estrutura do repositório for diferente, siga a organização real do proje
 - documente trechos complexos com comentários curtos e objetivos;
 - prefira constantes e enumerações para valores fixos;
 - valide entradas de sensores, credenciais e comandos externos.
+- Só crie testes com autorização do usuário
 
 ### 4.2 Firmware embarcado
 

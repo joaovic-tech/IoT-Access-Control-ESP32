@@ -8,8 +8,10 @@ import com.example.espcamapp.appContainer
 import com.example.espcamapp.data.model.Device
 import com.example.espcamapp.data.model.Room
 import com.example.espcamapp.data.repo.AccessRepository
+import com.example.espcamapp.data.repo.CreatePersonResult
 import com.example.espcamapp.data.repo.DeviceRepository
 import com.example.espcamapp.data.repo.PeopleRepository
+import com.example.espcamapp.data.repo.RefusedSample
 import com.example.espcamapp.data.repo.SampleImage
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -39,11 +41,15 @@ data class RegisterPersonUiState(
     val loading: Boolean = false,
     val saving: Boolean = false,
     val message: String? = null,
-    val warnings: List<String> = emptyList(),
+    /** Amostras que o servidor recusou no último envio, com o motivo de cada. */
+    val refused: List<RefusedSample> = emptyList(),
     val savedPersonName: String? = null,
     val selectedDevice: Device? = null
 ) {
     val editing: Boolean get() = personId != null
+
+    /** Nomes das fotos recusadas, para a grade marcar os slots correspondentes. */
+    val refusedFileNames: Set<String> get() = refused.map { it.fileName }.toSet()
 
     /** Amostras que a grade mostra: as do servidor primeiro, depois as novas. */
     val totalSamples: Int get() = existingSampleUrls.size + samples.size
@@ -57,7 +63,18 @@ data class RegisterPersonUiState(
 
     val sampleHint: String
         get() = when {
-            totalSamples == 0 -> "Envie de 3 a 5 fotos nítidas com diferentes ângulos do rosto"
+            // Depois de um envio parcial, contar as recusadas junto daria a
+            // impressão de que estão todas cadastradas.
+            refused.isNotEmpty() ->
+                "${existingSampleUrls.size} amostra(s) cadastrada(s) · " +
+                    "${refused.size} recusada(s) abaixo"
+
+            // O detector do dlib só enxerga rosto de frente: foto de perfil, de
+            // cabeça baixa ou de queixo erguido é recusada na hora do cadastro.
+            totalSamples == 0 ->
+                "Envie de 3 a 5 fotos nítidas com o rosto DE FRENTE (pode variar " +
+                    "expressão, luz e distância). Perfil ou cabeça muito inclinada " +
+                    "não é aceito."
             totalSamples < MIN_SAMPLES ->
                 "$totalSamples de $MIN_SAMPLES amostras — abaixo disso a pessoa fica pendente"
             else -> "$totalSamples amostras prontas para o treinamento"
@@ -182,23 +199,36 @@ class RegisterPersonViewModel(
         estado.copy(selectedRoomIds = novos)
     }
 
-    /** Amostras escolhidas na galeria (já lidas para bytes pela tela). */
-    fun addSamples(images: List<SampleImage>) {
-        if (images.isEmpty()) return
+    /**
+     * Amostras escolhidas na galeria (já lidas para bytes pela tela).
+     * [ignoradas] são as fotos que a tela não conseguiu abrir — elas precisam
+     * virar aviso, e não desaparecer em silêncio.
+     */
+    fun addSamples(images: List<SampleImage>, ignoradas: Int = 0) {
+        if (images.isEmpty() && ignoradas == 0) return
         val livres = _state.value.freeSlots
         if (livres <= 0) {
             showMessage("Máximo de ${RegisterPersonUiState.MAX_SAMPLES} amostras")
             return
         }
         update { it.copy(samples = it.samples + images.take(livres)) }
-        if (images.size > livres) {
-            showMessage("Só cabiam mais $livres amostra(s); o excedente foi ignorado")
+        when {
+            ignoradas > 0 ->
+                showMessage("$ignoradas foto(s) não puderam ser lidas da galeria")
+            images.size > livres ->
+                showMessage("Só cabiam mais $livres amostra(s); o excedente foi ignorado")
         }
     }
 
     fun removeSample(index: Int) {
         update { current ->
-            current.copy(samples = current.samples.filterIndexed { i, _ -> i != index })
+            val removida = current.samples.getOrNull(index)
+            current.copy(
+                samples = current.samples.filterIndexed { i, _ -> i != index },
+                // Tirar a foto da grade tira junto o aviso dela, senão o motivo
+                // continuaria na tela apontando para uma foto que não existe mais.
+                refused = current.refused.filterNot { it.fileName == removida?.fileName }
+            )
         }
     }
 
@@ -245,7 +275,7 @@ class RegisterPersonViewModel(
             return
         }
         viewModelScope.launch {
-            update { it.copy(saving = true, warnings = emptyList()) }
+            update { it.copy(saving = true, refused = emptyList()) }
             if (current.personId == null) criar(current) else salvarEdicao(current)
         }
     }
@@ -258,15 +288,7 @@ class RegisterPersonViewModel(
             samples = current.samples
         ).fold(
             onSuccess = { result ->
-                val person = result.person
-                update {
-                    it.copy(
-                        saving = false,
-                        warnings = result.warnings,
-                        savedPersonName = person?.name ?: current.name,
-                        message = buildSavedMessage(person?.samples ?: 0, result.warnings.size)
-                    )
-                }
+                aplicarResultado(result, current.samples, current.name)
             },
             onFailure = { error ->
                 update { it.copy(saving = false, message = error.message ?: "Falha ao cadastrar") }
@@ -301,17 +323,7 @@ class RegisterPersonViewModel(
 
         peopleRepository.addSamples(personId, current.samples).fold(
             onSuccess = { result ->
-                update {
-                    it.copy(
-                        saving = false,
-                        warnings = result.warnings,
-                        savedPersonName = current.name,
-                        message = buildSavedMessage(
-                            result.person?.samples ?: 0,
-                            result.warnings.size
-                        )
-                    )
-                }
+                aplicarResultado(result, current.samples, current.name)
             },
             onFailure = { error ->
                 // Os campos já foram salvos; só as amostras falharam.
@@ -327,9 +339,48 @@ class RegisterPersonViewModel(
         )
     }
 
-    private fun buildSavedMessage(accepted: Int, rejected: Int): String {
-        val base = "Cadastro salvo com $accepted amostra(s) — modelo retreinado"
-        return if (rejected > 0) "$base. $rejected amostra(s) recusada(s)." else base
+    /**
+     * Fecha o envio conforme o servidor aceitou ou não as amostras.
+     *
+     * Aceitou todas: sai da tela, como antes. Recusou alguma: a tela **fica
+     * aberta** mostrando quais caíram e por quê — antes ela voltava para a
+     * lista na mesma hora e a pessoa ficava com menos fotos do que escolheu,
+     * sem nenhuma explicação. Como a pessoa já foi criada no servidor, a tela
+     * passa a editá-la: salvar de novo manda só as fotos que faltam, em vez de
+     * criar um cadastro repetido.
+     */
+    private suspend fun aplicarResultado(
+        result: CreatePersonResult,
+        enviadas: List<SampleImage>,
+        nome: String
+    ) {
+        val person = result.person
+        val aceitas = person?.samples ?: 0
+        if (result.refused.isEmpty()) {
+            update {
+                it.copy(
+                    saving = false,
+                    refused = emptyList(),
+                    savedPersonName = person?.name ?: nome,
+                    message = "Cadastro salvo com $aceitas amostra(s) — modelo retreinado"
+                )
+            }
+            return
+        }
+
+        val recusadas = result.refused.map { it.fileName }.toSet()
+        val base = peopleRepository.serverBaseUrl()
+        update { estado ->
+            estado.copy(
+                saving = false,
+                personId = person?.id ?: estado.personId,
+                existingSampleUrls = person?.sampleUrls(base) ?: estado.existingSampleUrls,
+                samples = enviadas.filter { it.fileName in recusadas },
+                refused = result.refused,
+                message = "$aceitas foto(s) cadastrada(s); " +
+                    "${result.refused.size} recusada(s) — veja o motivo na tela"
+            )
+        }
     }
 
     fun consumeMessage() = update { it.copy(message = null) }

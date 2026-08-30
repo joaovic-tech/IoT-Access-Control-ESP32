@@ -152,10 +152,24 @@ fun PersonDto.toDomain(serverBaseUrl: String): Person = Person(
 @Serializable
 data class PeopleResponseDto(val people: List<PersonDto> = emptyList())
 
+/**
+ * Amostra que o servidor não aceitou. `faces` é quantos rostos ele encontrou
+ * na foto — 0 (rosto de lado/inclinado demais, ou nenhum) ou 2+ (mais de uma
+ * pessoa no enquadramento).
+ */
+@Serializable
+data class RefusedSampleDto(
+    val file: String = "",
+    val faces: Int = 0,
+    val reason: String = ""
+)
+
 @Serializable
 data class PersonResponseDto(
     val person: PersonDto? = null,
-    val warnings: List<String> = emptyList()
+    /** Texto pronto de cada recusa; mantido para versões antigas do servidor. */
+    val warnings: List<String> = emptyList(),
+    val refused: List<RefusedSampleDto> = emptyList()
 )
 
 @Serializable

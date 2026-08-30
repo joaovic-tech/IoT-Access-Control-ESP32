@@ -1,6 +1,9 @@
 package com.example.espcamapp.views
 
+import android.graphics.Bitmap
 import android.graphics.BitmapFactory
+import android.graphics.Matrix
+import android.media.ExifInterface
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.PickVisualMediaRequest
 import androidx.activity.result.contract.ActivityResultContracts
@@ -61,6 +64,7 @@ import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import coil.compose.AsyncImage
+import com.example.espcamapp.data.repo.RefusedSample
 import com.example.espcamapp.data.repo.SampleImage
 import com.example.espcamapp.ui.theme.DarkGrayInput
 import com.example.espcamapp.ui.theme.DarkSlateBg
@@ -75,6 +79,7 @@ import com.example.espcamapp.views.components.PrimaryButton
 import com.example.espcamapp.views.components.ScreenHorizontalPadding
 import com.example.espcamapp.views.components.SectionTitle
 import com.example.espcamapp.views.components.SelectableChips
+import java.io.ByteArrayInputStream
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -127,7 +132,9 @@ fun RegisterPersonScreen(
                     }.getOrNull()
                 }
             }
-            viewModel.addSamples(images)
+            // Foto que não abriu não pode sumir calada: sem este aviso o
+            // usuário escolhe 5 e a grade mostra menos, sem dizer por quê.
+            viewModel.addSamples(images, ignoradas = uris.size - images.size)
         }
     }
 
@@ -208,11 +215,28 @@ fun RegisterPersonScreen(
                 )
             }
 
-            if (state.warnings.isNotEmpty()) {
-                Spacer(Modifier.height(10.dp))
-                state.warnings.forEach { warning ->
-                    Text("• $warning", color = StatusAmberPending, fontSize = 11.sp)
+            if (state.refused.isNotEmpty()) {
+                Spacer(Modifier.height(12.dp))
+                Text(
+                    "${state.refused.size} foto(s) não foram aceitas:",
+                    color = StatusAmberPending,
+                    fontSize = 12.sp,
+                    fontWeight = FontWeight.Bold
+                )
+                Spacer(Modifier.height(4.dp))
+                // Agrupado: 3 fotos recusadas pelo mesmo motivo viravam 3
+                // linhas idênticas na tela.
+                state.refused.groupBy { it.explicacao }.forEach { (motivo, iguais) ->
+                    val prefixo = if (iguais.size > 1) "${iguais.size}× " else ""
+                    Text("• $prefixo$motivo", color = StatusAmberPending, fontSize = 11.sp)
                 }
+                Spacer(Modifier.height(6.dp))
+                Text(
+                    "Elas ficaram marcadas na grade acima. Remova cada uma no × " +
+                        "vermelho, escolha outra foto de frente e salve de novo.",
+                    color = SlateGray,
+                    fontSize = 11.sp
+                )
             }
 
             Spacer(Modifier.height(16.dp))
@@ -304,11 +328,15 @@ private fun SampleGrid(
                             modifier = Modifier.weight(1f)
                         )
 
-                        index < state.totalSamples -> FilledSampleSlot(
-                            sample = state.samples[index - existentes],
-                            onRemove = { onRemove(index - existentes) },
-                            modifier = Modifier.weight(1f)
-                        )
+                        index < state.totalSamples -> {
+                            val sample = state.samples[index - existentes]
+                            FilledSampleSlot(
+                                sample = sample,
+                                refused = sample.fileName in state.refusedFileNames,
+                                onRemove = { onRemove(index - existentes) },
+                                modifier = Modifier.weight(1f)
+                            )
+                        }
 
                         index == state.totalSamples -> AddSampleSlot(
                             onClick = onAdd,
@@ -379,15 +407,16 @@ private fun RemoteSampleSlot(url: String, modifier: Modifier = Modifier) {
 @Composable
 private fun FilledSampleSlot(
     sample: SampleImage,
+    refused: Boolean,
     onRemove: () -> Unit,
     modifier: Modifier = Modifier
 ) {
     // Miniatura reduzida: as fotos da galeria são grandes demais para o slot.
-    val bitmap = remember(sample) {
-        val options = BitmapFactory.Options().apply { inSampleSize = 4 }
-        BitmapFactory.decodeByteArray(sample.bytes, 0, sample.bytes.size, options)
-    }
-    SampleSlot(modifier = modifier) {
+    val bitmap = remember(sample) { sample.thumbnail() }
+    SampleSlot(
+        modifier = modifier,
+        highlight = if (refused) StatusAmberPending else null
+    ) {
         if (bitmap != null) {
             Image(
                 bitmap = bitmap.asImageBitmap(),
@@ -448,19 +477,63 @@ private fun EmptySampleSlot(modifier: Modifier = Modifier) {
     }
 }
 
+/** [highlight] contorna o slot — usado para apontar a amostra recusada. */
 @Composable
 private fun SampleSlot(
     modifier: Modifier = Modifier,
+    highlight: Color? = null,
     content: @Composable BoxScope.() -> Unit
 ) {
     Box(
         modifier = modifier
             .aspectRatio(0.92f)
             .clip(RoundedCornerShape(12.dp))
-            .background(DarkGrayInput),
+            .background(DarkGrayInput)
+            .then(
+                if (highlight != null) {
+                    Modifier.border(2.dp, highlight, RoundedCornerShape(12.dp))
+                } else {
+                    Modifier
+                }
+            ),
         content = content
     )
 }
+
+/**
+ * Miniatura da foto escolhida, já na orientação certa.
+ *
+ * A câmera do celular grava a foto deitada e marca o giro no EXIF; o
+ * `BitmapFactory` ignora essa marca, então a grade mostrava todas as amostras
+ * de lado. O servidor lê o EXIF (OpenCV faz isso sozinho), então isso é só a
+ * miniatura — mas ver a foto torta faz o usuário desconfiar do envio.
+ */
+private fun SampleImage.thumbnail(): Bitmap? {
+    val options = BitmapFactory.Options().apply { inSampleSize = 4 }
+    val bitmap = BitmapFactory.decodeByteArray(bytes, 0, bytes.size, options) ?: return null
+    val graus = runCatching {
+        val exif = ExifInterface(ByteArrayInputStream(bytes))
+        when (exif.getAttributeInt(ExifInterface.TAG_ORIENTATION, ExifInterface.ORIENTATION_NORMAL)) {
+            ExifInterface.ORIENTATION_ROTATE_90 -> 90f
+            ExifInterface.ORIENTATION_ROTATE_180 -> 180f
+            ExifInterface.ORIENTATION_ROTATE_270 -> 270f
+            else -> 0f
+        }
+    }.getOrDefault(0f)
+    if (graus == 0f) return bitmap
+    val matrix = Matrix().apply { postRotate(graus) }
+    return Bitmap.createBitmap(bitmap, 0, 0, bitmap.width, bitmap.height, matrix, true)
+}
+
+/** Texto de recusa em linguagem de usuário, a partir do que o servidor mediu. */
+private val RefusedSample.explicacao: String
+    get() = when {
+        faces >= 2 -> "$faces rostos na mesma foto — envie uma foto só com a pessoa"
+        faces == 0 && reason.contains("rosto", ignoreCase = true) ->
+            "Nenhum rosto reconhecível — a foto precisa mostrar o rosto de frente, " +
+                "sem virar nem inclinar muito a cabeça"
+        else -> reason
+    }
 
 /** Borda tracejada desenhada manualmente (Compose não tem API nativa). */
 private fun Modifier.dashedBorder(width: Dp, color: Color, cornerRadius: Dp): Modifier =
