@@ -252,3 +252,83 @@ gasto quase todo caçando 5 problemas que só aparecem quando tudo roda junto.
 | App | 18 unitários + 4 instrumentados |
 
 horário do termino: 22:49
+
+---
+
+[30/08/2026 - domingo]:
+
+### Cadastro de pessoa: cômodos na ficha, edição e fim da espera
+
+Hoje mexi nos **campos da pessoa** para bater com o design
+`cadastrar-nova-pessoa.png`: foto (amostras), nome, categoria/vínculo e os
+cômodos que ela pode acessar.
+
+### Tirei os níveis de acesso do caminho
+
+Ontem eu tinha criado uma camada de **níveis** ("Morador acessa tudo",
+"Visitante não acessa nada") e cada pessoa recebia um nível. Só que a tela do
+design marca **cômodo por cômodo, na ficha da pessoa** — manter as duas coisas
+seria a mesma regra escrita em dois lugares. Então os cômodos passaram para o
+cadastro da pessoa e o `levels_store` saiu junto com as rotas `/levels` e a
+seção de níveis no app.
+
+Quem já estava cadastrado migra sozinho: o nome do nível vira a categoria e os
+cômodos do nível vão para a pessoa. Testei com o meu próprio cadastro — o
+"Morador" com acesso total voltou como *Morador: Banheiro, Cozinha*. Cadastro
+antigo que só tinha `category` em texto mantém a categoria e fica **sem
+cômodo**, porque migrar para mais permissivo do que estava é o tipo de erro que
+abre porta sozinho.
+
+A chave mestra `authorized` continua existindo, mas fora do formulário (não
+está no design) — ela fica no menu ⋮ da lista de Pessoas.
+
+### Agora dá para editar uma pessoa
+
+Antes, para corrigir um nome eu tinha que apagar e cadastrar de novo, perdendo
+as amostras. *Pessoas* → menu ⋮ → **Editar cadastro** abre a mesma tela já
+preenchida, com as fotos que estão no servidor, o nome, a categoria e os
+cômodos marcados.
+
+### Por que cadastrar/apagar demorava tanto
+
+Eram **duas** causas, e as duas eu medi:
+
+| Causa | O que acontecia | Correção |
+| :--- | :--- | :--- |
+| Reprocessar tudo | toda gravação chamava `load_known_faces()`, que recodifica **todas as amostras de todas as pessoas** | indexar só a amostra nova (`index_sample`) e só remover do índice quem foi apagado (`forget_person`) |
+| Foto em tamanho original | o detector do dlib custa proporcional à área da imagem | reduzir para 1024 px antes de detectar (`MAX_ANALYSIS_WIDTH`) |
+
+Medição do mesmo rosto, mesma foto:
+
+| Largura analisada | Tempo | Rostos encontrados |
+| :--- | :---: | :---: |
+| 2544 px (original do celular) | 7,49 s | 1 |
+| 1024 px | 1,65 s | 1 |
+| 640 px | 1,04 s | 1 |
+
+Resultado com 3 amostras: **cadastro 22,3 s → 5,9 s**, **exclusão ~0,2 s**
+(antes crescia junto com o banco inteiro) e **edição ~0,2 s**. Os frames do
+ESP32 (640×480) já estavam abaixo do limite, então o reconhecimento normal não
+mudou.
+
+### Comparação com o design
+
+Rodei a tela no emulador e comparei com o `.png`. O que estava diferente:
+faltava "Categoria / Vínculo", faltava a lista de cômodos com caixas de
+marcação, sobrava um bloco "Status Autorizado", a grade tinha 5 slots numa
+linha em vez de 4 e o selo de remover a foto estava preto em vez de vermelho.
+Tudo ajustado. Mantive **"Cômodos"** com acento (o design escreve sem).
+
+### Anotações para não esquecer
+
+- Se eu mexer no servidor, **reiniciar o uvicorn**: um processo antigo ainda
+  rodando reescreve o JSON das pessoas no formato velho.
+- Cômodo apagado sai automaticamente da ficha de todo mundo.
+- Pessoa sem nenhum cômodo marcado não entra em lugar nenhum — é de propósito.
+
+### Testes
+
+| Onde | Situação |
+| :--- | :--- |
+| Servidor | 97 testes `pytest` |
+| App | 28 unitários + 4 instrumentados |
