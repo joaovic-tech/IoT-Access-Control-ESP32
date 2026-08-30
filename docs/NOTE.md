@@ -170,3 +170,85 @@ O aplicativo móvel funcionará como um **painel de controle (dashboard)**, perm
 - Limpeza dos códigos legados de dispositivo e servidor para reiniciar o desenvolvimento com uma base limpa e focada nessa nova arquitetura.
 - Planejamento do novo firmware para o ESP32-CAM e da estrutura do aplicativo mobile em Kotlin.
 
+---
+
+[29/08/2026 - sábado]:
+
+### Sistema funcionando de ponta a ponta 🎉
+
+Hoje o projeto saiu do "compila e passa nos testes" para **funcionando no
+hardware real**. Cadastrei meu próprio rosto pelo app, andei pelo ambiente em
+várias posições e o reconhecimento acertou — inclusive com uma segunda pessoa.
+
+Desde o último commit (17/08) o escopo cresceu muito: firmware com PIR + relé,
+servidor Python com OpenCV/dlib e o app Kotlin com 4 telas reais. Mas o dia foi
+gasto quase todo caçando 5 problemas que só aparecem quando tudo roda junto.
+
+### Os 5 problemas que travavam o funcionamento
+
+1. **Smart App Control do Windows 11 bloqueava o `dlib`.**
+   O import quebrava com "uma política de Controle de Aplicativo bloqueou este
+   arquivo". Não era versão de Python nem falta de compilador — era o antivírus
+   do sistema barrando `.pyd` sem assinatura. Precisei desligar o Smart App
+   Control (é **irreversível** sem reinstalar o Windows).
+   Receita que funcionou, sem precisar de Build Tools do Visual Studio:
+   Python 3.12 + `dlib-bin` (wheel pronto) + `face_recognition` com `--no-deps`
+   + `setuptools<81` + `numpy==1.26.4`.
+
+2. **IP errado do servidor.** O app e o firmware apontavam para
+   `192.168.15.10`, mas meu PC é `192.168.15.6`. O erro no app só dizia
+   "não foi possível conectar", sem falar o endereço. Corrigi e fiz o app
+   **mostrar qual endereço falhou** e testar `/health` antes de salvar.
+
+3. **A câmera está montada de cabeça para baixo — e o dlib não detecta rosto
+   invertido.** Esse foi o achado do dia. Todo scan devolvia `no_face` mesmo
+   com pessoas cadastradas. Medi no mesmo quadro:
+
+   | Imagem | Rostos encontrados |
+   | :--- | :---: |
+   | original (como sai da câmera) | **0** |
+   | girada 180° | **1** |
+
+   Solução: o servidor agora **gira o quadro antes de reconhecer**
+   (`rotation` em `/detect`, `/scan` e `/enroll`, com padrão `ROTATION` no
+   `.env` para o fluxo do PIR). A detecção é gravada já girada, então a
+   miniatura no app também sai na posição certa.
+
+4. **Timeout curto abortava o cadastro.** O servidor respondia `201 Created`,
+   mas o app desistia em 8 s enquanto o dlib codificava as amostras — a pessoa
+   era criada e a tela acusava erro. Separei em dois perfis: 8 s para consultas
+   e 90 s para as rotas de visão computacional.
+
+5. **A lista de Pessoas nunca recarregava.** Como o app não usa `NavHost`, o
+   ViewModel fica preso à Activity e o `refresh()` do `init` roda uma única
+   vez. Eu cadastrava alguém e voltava para uma lista vazia. No log do servidor
+   dava para ver: um único `GET /people` no início e nunca mais.
+
+### O que também ganhei hoje no app
+
+- **Editar dispositivo** (nome, IP, portas) — antes só dava para apagar.
+- **Orientação por dispositivo** (0/90/180/270), que gira o vídeo ao vivo e
+  acompanha o reconhecimento no servidor.
+- **Moldura por status** nas detecções: verde com o nome quando reconhece,
+  vermelha "Desconhecido" quando não.
+
+### Anotações para não esquecer
+
+- O `FACE_SERVER_URL` é **compilado no firmware**: se o IP do PC mudar, tenho
+  que regravar a placa. O IP do ESP32 também muda a cada boot (DHCP) —
+  preciso fazer reserva no roteador.
+- A porta 8000 precisa de regra de entrada no firewall do Windows para o
+  celular alcançar o servidor.
+- O ESP32-CAM aceita **um único cliente de stream** por vez.
+- Se eu endireitar a câmera, tenho que zerar a orientação nos **dois** lugares:
+  no dispositivo pelo app e no `ROTATION` do `.env`.
+
+### Testes
+
+| Onde | Situação |
+| :--- | :--- |
+| Firmware | compila limpo — 35% da flash, 22% da RAM |
+| Servidor | 38 testes `pytest` |
+| App | 18 unitários + 4 instrumentados |
+
+horário do termino: 22:49
