@@ -83,6 +83,8 @@ data class PersonDto(
     val authorized: Boolean = false,
     val samples: Int = 0,
     val status: String = "pendente",
+    /** Amostras necessárias para o cadastro sair de "pendente" (MIN_SAMPLES_ACTIVE). */
+    @SerialName("min_samples_active") val minSamplesActive: Int = 0,
     @SerialName("created_at") val createdAt: Double = 0.0,
     @SerialName("access_label") val accessLabel: String = ""
 )
@@ -137,6 +139,7 @@ fun PersonDto.toDomain(serverBaseUrl: String): Person = Person(
     } else {
         PersonStatus.PENDENTE
     },
+    minSamplesActive = minSamplesActive,
     createdAtEpochSeconds = createdAt,
     accessLabel = accessLabel,
     thumbnailUrl = if (samples > 0) {

@@ -68,13 +68,20 @@ class SettingsStore(private val context: Context) {
     }
 
     /** Adiciona um dispositivo e o seleciona. Retorna o [Device] já com id. */
-    suspend fun addDevice(name: String, host: String, port: Int, streamPort: Int): Device {
+    suspend fun addDevice(
+        name: String,
+        host: String,
+        port: Int,
+        streamPort: Int,
+        room: String = ""
+    ): Device {
         val device = Device(
             id = UUID.randomUUID().toString(),
             name = name.trim(),
             host = host.trim(),
             port = port,
-            streamPort = streamPort
+            streamPort = streamPort,
+            room = room.trim()
         )
         context.dataStore.edit { prefs ->
             val current = decodeDevices(prefs[KEY_DEVICES])

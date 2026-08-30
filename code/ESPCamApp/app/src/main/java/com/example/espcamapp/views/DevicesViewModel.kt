@@ -30,8 +30,10 @@ data class DevicesUiState(
     val devices: List<Device> = emptyList(),
     val cards: Map<String, DeviceCardState> = emptyMap(),
     val faceServerUrl: String = SettingsStore.DEFAULT_FACE_SERVER_URL,
-    /** Cômodos cadastrados, oferecidos na edição do dispositivo (F12). */
+    /** Cômodos cadastrados, oferecidos no cadastro e na edição do dispositivo (F12). */
     val rooms: List<Room> = emptyList(),
+    /** Por que a lista de cômodos veio vazia, quando foi falha de rede. */
+    val roomsError: String? = null,
     val saving: Boolean = false,
     /** Testando o endereço do servidor de faces (botão "Salvar endereço"). */
     val checkingServer: Boolean = false,
@@ -123,7 +125,13 @@ class DevicesViewModel(
      * Valida os campos, testa a conexão e só então grava.
      * Devolve o erro pela mensagem da tela em vez de salvar um IP inválido.
      */
-    fun addDevice(name: String, host: String, portText: String, streamPortText: String) {
+    fun addDevice(
+        name: String,
+        host: String,
+        portText: String,
+        streamPortText: String,
+        room: String = ""
+    ) {
         val fields = parseFields(name, host, portText, streamPortText) ?: return
 
         viewModelScope.launch {
@@ -132,7 +140,8 @@ class DevicesViewModel(
                 fields.name,
                 fields.host,
                 fields.port,
-                fields.streamPort
+                fields.streamPort,
+                room.trim()
             )
             _state.value = _state.value.copy(saving = false)
             showMessage(
@@ -155,6 +164,10 @@ class DevicesViewModel(
 
     fun startEditing(device: Device) {
         _state.value = _state.value.copy(editing = device)
+        // Os cômodos vivem no servidor e são criados em outra tela: sem reler
+        // aqui, um cômodo cadastrado depois da abertura do app nunca aparecia
+        // entre as opções.
+        loadRooms()
     }
 
     fun cancelEditing() {
@@ -266,7 +279,7 @@ class DevicesViewModel(
         val cleanName = name.trim()
         val cleanHost = host.trim()
         if (cleanName.isEmpty() || cleanHost.isEmpty()) {
-            showMessage("Preencha o nome do ambiente e o endereço IP")
+            showMessage("Preencha o nome do dispositivo e o endereço IP")
             return null
         }
         val port = portText.trim().toIntOrNull() ?: Device.DEFAULT_PORT
@@ -278,12 +291,23 @@ class DevicesViewModel(
         return DeviceFields(cleanName, cleanHost, port, streamPort)
     }
 
-    /** Cômodos disponíveis para vincular ao dispositivo (F12). */
+    /**
+     * Cômodos disponíveis para vincular ao dispositivo (F12).
+     *
+     * A falha é guardada em vez de ignorada: servidor fora do ar e "nenhum
+     * cômodo cadastrado" produzem a mesma lista vazia, e sem a distinção o
+     * usuário era mandado criar cômodos que já existiam.
+     */
     fun loadRooms() {
         viewModelScope.launch {
-            accessRepository.rooms().onSuccess { comodos ->
-                _state.value = _state.value.copy(rooms = comodos)
-            }
+            accessRepository.rooms().fold(
+                onSuccess = { comodos ->
+                    _state.value = _state.value.copy(rooms = comodos, roomsError = null)
+                },
+                onFailure = { error ->
+                    _state.value = _state.value.copy(roomsError = error.message ?: "sem resposta")
+                }
+            )
         }
     }
 

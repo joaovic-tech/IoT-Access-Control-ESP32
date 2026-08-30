@@ -64,12 +64,22 @@ class Person:
 
     @property
     def status(self) -> str:
+        """Prontidao do cadastro facial: "ativo" ou "pendente".
+
+        Fica "pendente" ate a pessoa ter MIN_SAMPLES_ACTIVE amostras. Ela ja e
+        comparada nesse estado -- so que com poucas amostras o reconhecimento
+        erra mais, entao a etiqueta pede mais fotos do rosto. Nao tem relacao
+        com `authorized`, que e quem decide o acesso.
+        """
         return "ativo" if self.samples >= MIN_SAMPLES_ACTIVE else "pendente"
 
     def to_dict(self) -> dict[str, Any]:
         data = asdict(self)
         data["samples"] = self.samples
         data["status"] = self.status
+        # Vai junto de cada pessoa para o app poder dizer QUANTAS amostras ainda
+        # faltam. Sem isso a etiqueta "Pendente" nao explicava o que fazer.
+        data["min_samples_active"] = MIN_SAMPLES_ACTIVE
         # Import tardio: access_control importa este modulo.
         import access_control
 

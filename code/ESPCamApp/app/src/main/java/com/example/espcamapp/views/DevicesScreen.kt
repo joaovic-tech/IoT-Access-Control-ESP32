@@ -34,6 +34,7 @@ import androidx.compose.material3.SwitchDefaults
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
@@ -56,6 +57,7 @@ import com.example.espcamapp.ui.theme.DarkGrayInput
 import com.example.espcamapp.ui.theme.OffWhite
 import com.example.espcamapp.ui.theme.PurplePrimary
 import com.example.espcamapp.ui.theme.SlateGray
+import com.example.espcamapp.ui.theme.StatusAmberPending
 import com.example.espcamapp.views.components.AppTextField
 import com.example.espcamapp.views.components.HeaderBlock
 import com.example.espcamapp.views.components.HeaderDivider
@@ -78,8 +80,14 @@ fun DevicesScreen(
     var ip by remember { mutableStateOf("") }
     var porta by remember { mutableStateOf("") }
     var portaStream by remember { mutableStateOf("") }
+    var comodo by remember { mutableStateOf("") }
     var serverUrl by remember(state.faceServerUrl) { mutableStateOf(state.faceServerUrl) }
     var unlockTarget by remember { mutableStateOf<Device?>(null) }
+
+    // Os cômodos são criados em Pessoas -> Cômodos da casa, por outro ViewModel.
+    // Este sobrevive à troca de abas, então sem reler ao abrir a tela a lista
+    // ficava congelada no que existia quando o app subiu.
+    LaunchedEffect(Unit) { viewModel.loadRooms() }
 
     ShowMessageEffect(state.message, snackbarHostState, viewModel::consumeMessage)
 
@@ -87,6 +95,7 @@ fun DevicesScreen(
         EditDeviceDialog(
             device = device,
             rooms = state.rooms,
+            roomsError = state.roomsError,
             saving = state.saving,
             onDismiss = viewModel::cancelEditing,
             onConfirm = { name, host, port, streamPort, rotation, room ->
@@ -164,7 +173,7 @@ fun DevicesScreen(
         SectionTitle("Adicionar Novo ESP32-CAM")
         Spacer(Modifier.height(12.dp))
 
-        AppTextField(nome, { nome = it }, "Nome do Ambiente (Ex: Sala de Estar)")
+        AppTextField(nome, { nome = it }, "Nome do Dispositivo (Ex: ESP32 da Sala)")
         Spacer(Modifier.height(12.dp))
         AppTextField(ip, { ip = it }, "Endereço IP na Rede (Ex: 192.168.15.72)")
         Spacer(Modifier.height(12.dp))
@@ -181,14 +190,25 @@ fun DevicesScreen(
             "Porta do stream MJPEG (padrão 81)",
             keyboardType = KeyboardType.Number
         )
+
+        // Cômodo já no cadastro: antes só a edição oferecia a escolha, e um
+        // dispositivo novo nascia sem lugar até o usuário reabrir o formulário.
+        Spacer(Modifier.height(16.dp))
+        RoomSection(
+            rooms = state.rooms,
+            selected = comodo,
+            roomsError = state.roomsError,
+            onSelect = { comodo = it }
+        )
+
         Spacer(Modifier.height(16.dp))
 
         PrimaryButton(
             text = if (state.saving) "Testando conexão..." else "Salvar e Conectar Dispositivo",
             onClick = {
                 if (!state.saving) {
-                    viewModel.addDevice(nome, ip, porta, portaStream)
-                    nome = ""; ip = ""; porta = ""; portaStream = ""
+                    viewModel.addDevice(nome, ip, porta, portaStream, comodo)
+                    nome = ""; ip = ""; porta = ""; portaStream = ""; comodo = ""
                 }
             }
         )
@@ -217,6 +237,7 @@ fun DevicesScreen(
 private fun EditDeviceDialog(
     device: Device,
     rooms: List<Room>,
+    roomsError: String?,
     saving: Boolean,
     onDismiss: () -> Unit,
     onConfirm: (
@@ -240,7 +261,7 @@ private fun EditDeviceDialog(
         title = { Text("Editar dispositivo") },
         text = {
             Column(modifier = Modifier.verticalScroll(rememberScrollState())) {
-                AppTextField(nome, { nome = it }, "Nome do Ambiente")
+                AppTextField(nome, { nome = it }, "Nome do Dispositivo")
                 Spacer(Modifier.height(10.dp))
                 AppTextField(ip, { ip = it }, "Endereço IP na Rede")
                 Spacer(Modifier.height(10.dp))
@@ -254,32 +275,12 @@ private fun EditDeviceDialog(
                 )
 
                 Spacer(Modifier.height(16.dp))
-                SectionTitle("Cômodo vigiado")
-                Spacer(Modifier.height(4.dp))
-                Text(
-                    "O servidor usa este cômodo para conferir se a pessoa reconhecida " +
-                        "pode estar aqui, segundo a observação do cadastro dela.",
-                    color = SlateGray,
-                    fontSize = 12.sp
+                RoomSection(
+                    rooms = rooms,
+                    selected = comodo,
+                    roomsError = roomsError,
+                    onSelect = { comodo = it }
                 )
-                Spacer(Modifier.height(10.dp))
-                if (rooms.isEmpty()) {
-                    Text(
-                        "Nenhum cômodo cadastrado ainda — crie em " +
-                            "Pessoas → Cômodos da casa. Enquanto isso, o nome " +
-                            "digitado aqui é casado pelo texto.",
-                        color = SlateGray,
-                        fontSize = 12.sp
-                    )
-                    Spacer(Modifier.height(8.dp))
-                    AppTextField(comodo, { comodo = it }, "Ex: Quarto do João")
-                } else {
-                    SelectableChips(
-                        options = rooms.map { it.name },
-                        selected = comodo,
-                        onSelect = { comodo = it }
-                    )
-                }
 
                 Spacer(Modifier.height(16.dp))
                 SectionTitle("Orientação da imagem")
@@ -317,6 +318,73 @@ private fun EditDeviceDialog(
             TextButton(onClick = onDismiss, enabled = !saving) { Text("Cancelar") }
         }
     )
+}
+
+/** Rótulo do chip que desmarca o cômodo — não é o nome de nenhum cômodo. */
+private const val SEM_COMODO = "Sem cômodo"
+
+/**
+ * Escolha do cômodo vigiado, usada tanto no cadastro quanto na edição.
+ *
+ * As opções vêm do servidor (Pessoas -> Cômodos da casa) e são relidas ao abrir
+ * a tela e ao abrir a edição, então um cômodo recém-criado já aparece aqui.
+ */
+@Composable
+private fun RoomSection(
+    rooms: List<Room>,
+    selected: String,
+    roomsError: String?,
+    onSelect: (String) -> Unit
+) {
+    Column {
+        SectionTitle("Cômodo vigiado")
+        Spacer(Modifier.height(4.dp))
+        Text(
+            "O servidor usa este cômodo para conferir se a pessoa reconhecida " +
+                "pode estar aqui, segundo os cômodos liberados no cadastro dela.",
+            color = SlateGray,
+            fontSize = 12.sp
+        )
+        Spacer(Modifier.height(10.dp))
+
+        if (rooms.isEmpty()) {
+            Text(
+                if (roomsError != null) {
+                    "Não foi possível ler os cômodos do servidor ($roomsError). " +
+                        "Confira o endereço logo abaixo — enquanto isso, o nome " +
+                        "digitado aqui é casado pelo texto."
+                } else {
+                    "Nenhum cômodo cadastrado ainda — crie em Pessoas -> Cômodos " +
+                        "da casa. Enquanto isso, o nome digitado aqui é casado " +
+                        "pelo texto."
+                },
+                color = if (roomsError != null) StatusAmberPending else SlateGray,
+                fontSize = 12.sp
+            )
+            Spacer(Modifier.height(8.dp))
+            AppTextField(selected, onSelect, "Ex: Quarto do João")
+            return@Column
+        }
+
+        SelectableChips(
+            // "Sem cômodo" primeiro: sem ele não havia como desmarcar uma
+            // escolha depois de feita.
+            options = listOf(SEM_COMODO) + rooms.map { it.name },
+            selected = selected.ifBlank { SEM_COMODO },
+            onSelect = { onSelect(if (it == SEM_COMODO) "" else it) }
+        )
+
+        // O cômodo é gravado pelo nome: se ele foi renomeado ou removido no
+        // servidor, nenhum chip fica marcado e o motivo precisa ficar visível.
+        if (selected.isNotBlank() && rooms.none { it.name == selected }) {
+            Spacer(Modifier.height(6.dp))
+            Text(
+                "O cômodo \"$selected\" não está mais na lista — escolha um acima.",
+                color = StatusAmberPending,
+                fontSize = 11.sp
+            )
+        }
+    }
 }
 
 /** Seletor de giro (0/90/180/270) usado no formulário e no card. */

@@ -53,6 +53,7 @@ import com.example.espcamapp.data.model.PersonStatus
 import com.example.espcamapp.ui.theme.DarkGrayCard
 import com.example.espcamapp.ui.theme.OffWhite
 import com.example.espcamapp.ui.theme.SlateGray
+import com.example.espcamapp.ui.theme.StatusAmberPending
 import com.example.espcamapp.views.components.AppTextField
 import com.example.espcamapp.views.components.HeaderBlock
 import com.example.espcamapp.views.components.HeaderDivider
@@ -112,7 +113,9 @@ fun PeopleScreen(
                 Spacer(Modifier.height(16.dp))
                 HeaderBlock(
                     title = "ESPCamApp - Pessoas",
-                    subtitle = "Rostos cadastrados para reconhecimento"
+                    // O sufixo explica a etiqueta das fichas: "Pendente" é
+                    // sobre amostras do rosto, não sobre permissão de acesso.
+                    subtitle = "Rostos cadastrados · \"Pendente\" = faltam amostras do rosto"
                 )
                 HeaderDivider()
                 Spacer(Modifier.height(16.dp))
@@ -217,6 +220,8 @@ private fun PersonCard(
             }
         }
         Column(horizontalAlignment = Alignment.End) {
+            // "Ativo"/"Pendente" é a prontidão do reconhecimento, não permissão
+            // de acesso: pendente = ainda faltam amostras do rosto.
             StatusPill(
                 text = person.status.label,
                 status = if (person.status == PersonStatus.ATIVO) PillStatus.ACTIVE else PillStatus.PENDING
@@ -227,6 +232,11 @@ private fun PersonCard(
                 color = SlateGray,
                 fontSize = 12.sp
             )
+            // Sem esta linha a etiqueta "Pendente" ficava para sempre na tela
+            // sem dizer o que fazer para sair dela.
+            person.statusHint?.let { hint ->
+                Text(hint, color = StatusAmberPending, fontSize = 11.sp)
+            }
         }
         Box {
             IconButton(onClick = { menuOpen = true }) {

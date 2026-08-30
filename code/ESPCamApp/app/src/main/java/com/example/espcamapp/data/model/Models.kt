@@ -82,6 +82,12 @@ data class DeviceStatus(
     val streamClients: Int
 )
 
+/**
+ * Prontidão do cadastro facial, calculada pelo servidor a partir do número de
+ * amostras: `PENDENTE` até a pessoa atingir `MIN_SAMPLES_ACTIVE` amostras,
+ * `ATIVO` a partir daí. Não tem relação com autorização de acesso — quem
+ * decide isso é [Person.authorized] e a lista de cômodos.
+ */
 enum class PersonStatus { ATIVO, PENDENTE;
 
     val label: String get() = if (this == ATIVO) "Ativo" else "Pendente"
@@ -113,6 +119,8 @@ data class Person(
     val authorized: Boolean,
     val samples: Int,
     val status: PersonStatus,
+    /** Amostras necessárias para o cadastro sair de "Pendente", segundo o servidor. */
+    val minSamplesActive: Int = 0,
     val createdAtEpochSeconds: Double,
     /** Frase pronta vinda do servidor (template, não modelo de linguagem). */
     val accessLabel: String = "",
@@ -122,6 +130,25 @@ data class Person(
      */
     val thumbnailUrl: String? = null
 ) {
+    /** Quantas amostras ainda faltam para o cadastro ficar "Ativo". */
+    val missingSamples: Int
+        get() = (minSamplesActive - samples).coerceAtLeast(0)
+
+    /**
+     * Explica a etiqueta "Pendente" em vez de deixá-la parada sem motivo: diz
+     * quantas amostras faltam para o reconhecimento ficar confiável. `null`
+     * quando o cadastro já está ativo (a etiqueta "Ativo" se explica sozinha).
+     */
+    val statusHint: String?
+        get() = when {
+            status == PersonStatus.ATIVO -> null
+            missingSamples == 1 -> "falta 1 amostra"
+            missingSamples > 1 -> "faltam $missingSamples amostras"
+            // O servidor não informou o mínimo (versão antiga): ao menos diz o
+            // que a etiqueta significa.
+            else -> "poucas amostras"
+        }
+
     /** URLs das amostras já cadastradas, na ordem em que o servidor as guarda. */
     fun sampleUrls(serverBaseUrl: String): List<String> =
         (1..samples).map { "${serverBaseUrl.trimEnd('/')}/people/$id/samples/$it" }

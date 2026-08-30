@@ -6,8 +6,8 @@ import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.PaddingValues
-import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
@@ -182,7 +182,12 @@ fun StatusPill(text: String, status: PillStatus, modifier: Modifier = Modifier) 
     }
 }
 
-/** Grupo de chips selecionáveis (ex.: Morador / Visitante / Prestador). */
+/**
+ * Grupo de chips selecionáveis (ex.: Morador / Visitante / Prestador, cômodos).
+ *
+ * Em [FlowRow] de propósito: com uma `Row` simples, a partir do terceiro ou
+ * quarto cômodo os chips saíam da tela e não havia como escolhê-los.
+ */
 @Composable
 fun SelectableChips(
     options: List<String>,
@@ -190,7 +195,11 @@ fun SelectableChips(
     onSelect: (String) -> Unit,
     modifier: Modifier = Modifier
 ) {
-    Row(modifier = modifier, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+    FlowRow(
+        modifier = modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.spacedBy(10.dp),
+        verticalArrangement = Arrangement.spacedBy(10.dp)
+    ) {
         options.forEach { option ->
             val isSelected = option == selected
             Box(

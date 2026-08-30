@@ -133,7 +133,18 @@ static int ra_filter_run(ra_filter_t *filter, int value) {
 #endif
 
 #if defined(LED_GPIO_NUM)
+// Acende/apaga o LED de forma TEMPORARIA (flash da captura, abertura e
+// fechamento do stream). O flash continuo ligado pelo app em /api/flash e
+// persistente e tem prioridade absoluta aqui: sem esta guarda, abrir o stream
+// (tela Principal) reaplicava `led_duty`, que continua 0 enquanto ninguem usa
+// o slider da pagina web -- e o LED que o usuario tinha acabado de ligar na
+// tela Dispositivos apagava sozinho.
 void enable_led(bool en) {  // Turn LED On or Off
+  if (getFlashLedState()) {
+    ledcWrite(LED_GPIO_NUM, getFlashLedDuty());
+    log_i("Flash continuo ligado: LED mantido em %d", getFlashLedDuty());
+    return;
+  }
   int duty = en ? led_duty : 0;
   if (en && isStreaming && (led_duty > CONFIG_LED_MAX_INTENSITY)) {
     duty = CONFIG_LED_MAX_INTENSITY;
@@ -457,7 +468,12 @@ static esp_err_t cmd_handler(httpd_req_t *req) {
 #if defined(LED_GPIO_NUM)
   else if (!strcmp(variable, "led_intensity")) {
     led_duty = val;
-    if (isStreaming) {
+    if (getFlashLedState()) {
+      // Flash continuo aceso: o slider muda o brilho do estado persistente,
+      // senao enable_led() abaixo o ignoraria e o novo valor nao apareceria.
+      // Brilho 0 no slider equivale a desligar o flash.
+      setFlashLed(val > 0, val);
+    } else if (isStreaming) {
       enable_led(true);
     }
   }

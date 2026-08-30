@@ -41,9 +41,15 @@ class DeviceRepository(
      * Testa a conexão antes de salvar: um IP digitado errado não vira um card
      * permanentemente offline na lista.
      */
-    suspend fun addDevice(name: String, host: String, port: Int, streamPort: Int): Result<Device> {
+    suspend fun addDevice(
+        name: String,
+        host: String,
+        port: Int,
+        streamPort: Int,
+        room: String = ""
+    ): Result<Device> {
         val probe = Device(id = "probe", name = name, host = host, port = port, streamPort = streamPort)
-        return status(probe).map { settings.addDevice(name, host, port, streamPort) }
+        return status(probe).map { settings.addDevice(name, host, port, streamPort, room) }
     }
 
     /**
