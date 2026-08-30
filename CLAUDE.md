@@ -129,3 +129,5 @@ Se necessário, o projeto pode ser expandido com:
 - dashboards de monitoramento e relatórios.
 
 Em resumo: foque em robustez, segurança, baixo consumo e confiabilidade para operação de controle de acesso em ambiente real.
+
+OBS: Dentro do ESP32-cam existe um cartão sd de 2GB

@@ -10,7 +10,13 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Callable
 
-from config import KNOWN_FACES_DIR, TOLERANCE
+import presence
+from config import (
+    KNOWN_FACES_DIR,
+    MAX_ANALYSIS_WIDTH,
+    PRESENCE_FALLBACK,
+    TOLERANCE,
+)
 
 try:
     import cv2
@@ -79,10 +85,22 @@ def rotate_jpeg(data: bytes, degrees: int) -> bytes:
 
 
 def _decode_image(data: bytes):
+    """Decodifica o JPEG em RGB, reduzindo o que for grande demais.
+
+    O detector HOG do dlib custa proporcional a area: uma foto de celular
+    (2544 px de largura) leva ~7,5 s, a mesma foto em 1024 px leva ~1,6 s e
+    encontra o mesmo rosto. Os quadros do ESP32 (640x480) passam intactos.
+    """
     arr = np.frombuffer(data, np.uint8)
     img = cv2.imdecode(arr, cv2.IMREAD_COLOR)
     if img is None:
         raise ValueError("Imagem corrompida ou formato invalido")
+    largura = img.shape[1]
+    if MAX_ANALYSIS_WIDTH and largura > MAX_ANALYSIS_WIDTH:
+        altura = round(img.shape[0] * MAX_ANALYSIS_WIDTH / largura)
+        img = cv2.resize(
+            img, (MAX_ANALYSIS_WIDTH, altura), interpolation=cv2.INTER_AREA
+        )
     return cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
 
 
@@ -98,6 +116,45 @@ def count_faces(data: bytes) -> int:
         raise RuntimeError(ENGINE_ERROR)
     encs, _ = _encodings_from_bytes(data)
     return len(encs)
+
+
+def _refresh_stats() -> dict[str, int]:
+    _last_stats.update(
+        people=len(set(_known_person_ids)), samples=len(_known_person_ids)
+    )
+    return dict(_last_stats)
+
+
+def index_sample(person_id: str, data: bytes) -> int:
+    """Indexa UMA amostra nova, sem reler o banco inteiro.
+
+    Retorna quantos rostos a imagem tem; so indexa quando e exatamente 1, que
+    e a mesma validacao exigida no cadastro.
+
+    Existe por causa do tempo de resposta: cadastrar ou remover alguem chamava
+    `load_known_faces()`, que recodifica TODAS as amostras de TODAS as pessoas
+    (o dlib leva ~1 s por imagem). Com 5 pessoas de 4 amostras, salvar uma
+    sexta pessoa custava 20 s de trabalho ja feito antes.
+    """
+    if not ENGINE_AVAILABLE:
+        raise RuntimeError(ENGINE_ERROR)
+    encs, _ = _encodings_from_bytes(data)
+    if len(encs) != 1:
+        return len(encs)
+    _known_encodings.append(encs[0])
+    _known_person_ids.append(person_id)
+    _refresh_stats()
+    return 1
+
+
+def forget_person(person_id: str) -> dict[str, int]:
+    """Tira do indice em memoria as amostras de uma pessoa removida."""
+    global _known_encodings, _known_person_ids
+    manter = [i for i, pid in enumerate(_known_person_ids) if pid != person_id]
+    if len(manter) != len(_known_person_ids):
+        _known_encodings = [_known_encodings[i] for i in manter]
+        _known_person_ids = [_known_person_ids[i] for i in manter]
+    return _refresh_stats()
 
 
 def load_known_faces() -> dict[str, int]:
@@ -139,6 +196,11 @@ def load_known_faces() -> dict[str, int]:
     return dict(_last_stats)
 
 
+def decode_rgb(data: bytes):
+    """Quadro decodificado em RGB, para quem precisa analisar os pixels."""
+    return _decode_image(data)
+
+
 def identify(
     data: bytes,
     resolve: Callable[[str], tuple[str, bool]],
@@ -146,13 +208,26 @@ def identify(
     """Roda o pipeline de reconhecimento.
 
     `resolve(person_id) -> (name, authorized)` traduz o id para metadados.
-    Retorna (status, matches) com status em {recognized, unknown, no_face}.
+    Retorna (status, matches) com status em
+    {recognized, unknown, person_no_face, no_face}.
+
+    `person_no_face` (G2) e o caso em que o reconhecimento nao extraiu nenhum
+    rosto mas os detectores auxiliares acharam alguem no quadro -- rosto de
+    lado, mal iluminado ou so o corpo. Antes isso virava `no_face` e sumia do
+    log como se nao tivesse passado ninguem.
     """
     if not ENGINE_AVAILABLE:
         raise RuntimeError(ENGINE_ERROR)
 
-    encs, locations = _encodings_from_bytes(data)
+    rgb = _decode_image(data)
+    locations = face_recognition.face_locations(rgb)
+    encs = face_recognition.face_encodings(rgb, locations)
     if not encs:
+        if PRESENCE_FALLBACK:
+            achado = presence.detect(rgb)
+            if achado["presente"]:
+                print(f"[PRESENCA] alguem no quadro via {achado['fonte']}")
+                return "person_no_face", []
         return "no_face", []
 
     matches: list[FaceMatch] = []

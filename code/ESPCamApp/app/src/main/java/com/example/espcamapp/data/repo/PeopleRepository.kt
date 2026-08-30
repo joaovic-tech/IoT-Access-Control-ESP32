@@ -34,43 +34,85 @@ class PeopleRepository(
     private suspend fun serverUrl(): String = settings.faceServerUrl.first()
 
     suspend fun list(): Result<List<Person>> = apiCall {
-        api.people("${serverUrl()}/people").people.map { it.toDomain() }
+        val base = serverUrl()
+        api.people("$base/people").people.map { it.toDomain(base) }
+    }
+
+    /** Uma pessoa pelo id — o servidor só expõe a lista, então filtra aqui. */
+    suspend fun find(personId: String): Result<Person?> = apiCall {
+        val base = serverUrl()
+        api.people("$base/people").people
+            .firstOrNull { it.id == personId }
+            ?.toDomain(base)
+    }
+
+    /** Base do servidor de faces, para montar as URLs das amostras. */
+    suspend fun serverBaseUrl(): String = serverUrl()
+
+    /** Catálogo de categorias/vínculos; a tela cai no padrão se falhar. */
+    suspend fun categories(): Result<List<String>> = apiCall {
+        api.categories("${serverUrl()}/categories").categories
     }
 
     suspend fun create(
         name: String,
         category: String,
-        authorized: Boolean,
-        note: String,
-        samples: List<SampleImage>
+        roomIds: List<String>,
+        samples: List<SampleImage>,
+        authorized: Boolean = true
     ): Result<CreatePersonResult> = apiCall(retries = 0) {
-        val parts = samples.mapIndexed { index, sample ->
-            MultipartBody.Part.createFormData(
-                "files",
-                sample.fileName.ifBlank { "amostra_$index.jpg" },
-                sample.bytes.toRequestBody(IMAGE_JPEG)
-            )
-        }
+        val base = serverUrl()
         val response = heavyApi.createPerson(
-            url = "${serverUrl()}/people",
+            url = "$base/people",
             name = name.asTextPart(),
             category = category.asTextPart(),
+            rooms = roomIds.joinToString(",").asTextPart(),
             authorized = authorized.toString().asTextPart(),
-            note = note.asTextPart(),
-            files = parts
+            files = samples.toParts()
         )
-        CreatePersonResult(response.person?.toDomain(), response.warnings)
+        CreatePersonResult(response.person?.toDomain(base), response.warnings)
     }
 
-    suspend fun setAuthorized(personId: String, authorized: Boolean): Result<Person?> = apiCall {
+    /** Edição do cadastro: nome, categoria e cômodos liberados. */
+    suspend fun update(
+        personId: String,
+        name: String,
+        category: String,
+        roomIds: List<String>
+    ): Result<Person?> = apiCall(retries = 0) {
+        val base = serverUrl()
         api.patchPerson(
-            "${serverUrl()}/people/$personId",
-            PersonPatchDto(authorized = authorized)
-        ).person?.toDomain()
+            "$base/people/$personId",
+            PersonPatchDto(name = name, category = category, rooms = roomIds)
+        ).person?.toDomain(base)
     }
 
+    /** Amostras novas para quem já está cadastrado (`POST /people/{id}/samples`). */
+    suspend fun addSamples(
+        personId: String,
+        samples: List<SampleImage>
+    ): Result<CreatePersonResult> = apiCall(retries = 0) {
+        val base = serverUrl()
+        val response = heavyApi.addSamples(
+            url = "$base/people/$personId/samples",
+            files = samples.toParts()
+        )
+        CreatePersonResult(response.person?.toDomain(base), response.warnings)
+    }
+
+    suspend fun setAuthorized(personId: String, authorized: Boolean): Result<Person?> =
+        apiCall(retries = 0) {
+            val base = serverUrl()
+            api.patchPerson(
+                "$base/people/$personId",
+                PersonPatchDto(authorized = authorized)
+            ).person?.toDomain(base)
+        }
+
+    // Sem nova tentativa: se a primeira chegou ao servidor, repetir só faz a
+    // tela esperar de novo pelo mesmo resultado.
     suspend fun delete(personId: String): Result<Unit> =
-        apiCall { api.deletePerson("${serverUrl()}/people/$personId") }
+        apiCall(retries = 0) { api.deletePerson("${serverUrl()}/people/$personId") }
 
     /**
      * Pede ao servidor que capture no ESP32-CAM e use o frame como amostra.
@@ -82,14 +124,15 @@ class PeopleRepository(
         esp32Url: String?,
         rotationDegrees: Int
     ): Result<Person?> = apiCall(retries = 0) {
+        val base = serverUrl()
         heavyApi.enrollFromEsp32(
-            "${serverUrl()}/enroll/from-esp32",
+            "$base/enroll/from-esp32",
             EnrollRequestDto(
                 personId = personId,
                 esp32Url = esp32Url,
                 rotation = rotationDegrees
             )
-        ).person?.toDomain()
+        ).person?.toDomain(base)
     }
 
     suspend fun health(): Result<com.example.espcamapp.data.model.ServerHealth> =
@@ -100,5 +143,14 @@ class PeopleRepository(
         val TEXT_PLAIN = "text/plain".toMediaType()
 
         fun String.asTextPart(): RequestBody = toRequestBody(TEXT_PLAIN)
+
+        fun List<SampleImage>.toParts(): List<MultipartBody.Part> =
+            mapIndexed { index, sample ->
+                MultipartBody.Part.createFormData(
+                    "files",
+                    sample.fileName.ifBlank { "amostra_$index.jpg" },
+                    sample.bytes.toRequestBody(IMAGE_JPEG)
+                )
+            }
     }
 }

@@ -5,6 +5,7 @@ import com.example.espcamapp.data.model.DetectionStatus
 import com.example.espcamapp.data.model.DeviceStatus
 import com.example.espcamapp.data.model.Person
 import com.example.espcamapp.data.model.PersonStatus
+import com.example.espcamapp.data.model.Room
 import com.example.espcamapp.data.model.ScanResult
 import com.example.espcamapp.data.model.ServerHealth
 import kotlinx.serialization.SerialName
@@ -76,26 +77,73 @@ data class PersonDto(
     val id: String,
     val name: String = "",
     val category: String = "",
+    /** Ids dos cômodos liberados para esta pessoa. */
+    val rooms: List<String> = emptyList(),
+    @SerialName("room_names") val roomNames: List<String> = emptyList(),
     val authorized: Boolean = false,
-    val note: String = "",
     val samples: Int = 0,
     val status: String = "pendente",
-    @SerialName("created_at") val createdAt: Double = 0.0
+    @SerialName("created_at") val createdAt: Double = 0.0,
+    @SerialName("access_label") val accessLabel: String = ""
 )
 
-fun PersonDto.toDomain(): Person = Person(
+@Serializable
+data class RoomDto(
+    val id: String,
+    val name: String = "",
+    val slug: String = ""
+)
+
+fun RoomDto.toDomain(): Room = Room(id = id, name = name)
+
+@Serializable
+data class RoomsResponseDto(val rooms: List<RoomDto> = emptyList())
+
+@Serializable
+data class RoomResponseDto(val room: RoomDto? = null)
+
+@Serializable
+data class RoomInDto(val name: String)
+
+// --- Assistente do administrador (G3) ---
+
+@Serializable
+data class AssistantQuestionDto(val question: String)
+
+@Serializable
+data class AssistantApplyDto(val proposal: Map<String, String>)
+
+@Serializable
+data class AssistantResponseDto(
+    val ok: Boolean = false,
+    val action: String = "",
+    val answer: String = "",
+    @SerialName("requires_confirmation") val requiresConfirmation: Boolean = false,
+    val proposal: Map<String, String>? = null,
+    val detections: List<DetectionDto> = emptyList()
+)
+
+/** [serverBaseUrl] resolve a miniatura (`/people/{id}/samples/1`) para absoluta. */
+fun PersonDto.toDomain(serverBaseUrl: String): Person = Person(
     id = id,
     name = name,
-    category = category.ifBlank { "Visitante" },
+    category = category,
+    roomIds = rooms,
+    roomNames = roomNames,
     authorized = authorized,
-    note = note,
     samples = samples,
     status = if (status.equals("ativo", ignoreCase = true)) {
         PersonStatus.ATIVO
     } else {
         PersonStatus.PENDENTE
     },
-    createdAtEpochSeconds = createdAt
+    createdAtEpochSeconds = createdAt,
+    accessLabel = accessLabel,
+    thumbnailUrl = if (samples > 0) {
+        serverBaseUrl.trimEnd('/') + "/people/" + id + "/samples/1"
+    } else {
+        null
+    }
 )
 
 @Serializable
@@ -111,9 +159,14 @@ data class PersonResponseDto(
 data class PersonPatchDto(
     val name: String? = null,
     val category: String? = null,
-    val authorized: Boolean? = null,
-    val note: String? = null
+    /** `null` deixa os cômodos como estão; lista vazia tranca a pessoa. */
+    val rooms: List<String>? = null,
+    val authorized: Boolean? = null
 )
+
+/** Catálogo de categorias/vínculos oferecido na tela de cadastro. */
+@Serializable
+data class CategoriesResponseDto(val categories: List<String> = emptyList())
 
 @Serializable
 data class DetectionDto(
@@ -127,7 +180,14 @@ data class DetectionDto(
     @SerialName("person_id") val personId: String? = null,
     val category: String = "",
     val authorized: Boolean = false,
-    val source: String = ""
+    val source: String = "",
+    val room: String = "",
+    /** `null` = não havia regra de cômodo (ou cômodo) para avaliar. */
+    @SerialName("access_allowed") val accessAllowed: Boolean? = null,
+    @SerialName("access_reason") val accessReason: String = "",
+    /** `null` = verificação de vivacidade desligada no servidor. */
+    val live: Boolean? = null,
+    @SerialName("live_score") val liveScore: Double? = null
 )
 
 /** [serverBaseUrl] resolve a URL relativa `/media/detections/...` para absoluta. */
@@ -139,7 +199,11 @@ fun DetectionDto.toDomain(serverBaseUrl: String): Detection = Detection(
     personName = person,
     category = category,
     authorized = authorized,
-    source = source
+    source = source,
+    room = room,
+    accessAllowed = accessAllowed,
+    accessReason = accessReason,
+    live = live
 )
 
 @Serializable
@@ -174,7 +238,10 @@ fun DetectResponseDto.toDomain(): ScanResult = ScanResult(
 data class ScanRequestDto(
     @SerialName("esp32_url") val esp32Url: String? = null,
     /** Giro aplicado pelo servidor antes de detectar (0/90/180/270). */
-    val rotation: Int = 0
+    val rotation: Int = 0,
+    /** Cômodo vigiado pelo dispositivo; vazio deixa valer o `ROOM` do servidor. */
+    val room: String = "",
+    @SerialName("room_id") val roomId: String? = null
 )
 
 @Serializable

@@ -59,19 +59,36 @@ interface FaceServerApi {
     @GET
     suspend fun people(@Url url: String): PeopleResponseDto
 
+    /** Catálogo de categorias/vínculos oferecido na tela de cadastro. */
+    @GET
+    suspend fun categories(@Url url: String): CategoriesResponseDto
+
+    /**
+     * Cadastro completo: dados + amostras no mesmo POST. Os cômodos vão como
+     * campo de formulário (ids separados por vírgula) porque um multipart não
+     * tem corpo JSON onde caber a lista.
+     */
     @Multipart
     @POST
     suspend fun createPerson(
         @Url url: String,
         @Part("name") name: RequestBody,
         @Part("category") category: RequestBody,
+        @Part("rooms") rooms: RequestBody,
         @Part("authorized") authorized: RequestBody,
-        @Part("note") note: RequestBody,
         @Part files: List<MultipartBody.Part>
     ): PersonResponseDto
 
     @PATCH
     suspend fun patchPerson(@Url url: String, @Body patch: PersonPatchDto): PersonResponseDto
+
+    /** Amostras extras para quem já está cadastrado (usado na edição). */
+    @Multipart
+    @POST
+    suspend fun addSamples(
+        @Url url: String,
+        @Part files: List<MultipartBody.Part>
+    ): PersonResponseDto
 
     @DELETE
     suspend fun deletePerson(@Url url: String)
@@ -84,4 +101,32 @@ interface FaceServerApi {
 
     @POST
     suspend fun enrollFromEsp32(@Url url: String, @Body body: EnrollRequestDto): PersonResponseDto
+
+    // --- Cômodos ---
+
+    @GET
+    suspend fun rooms(@Url url: String): RoomsResponseDto
+
+    @POST
+    suspend fun createRoom(@Url url: String, @Body body: RoomInDto): RoomResponseDto
+
+    @PATCH
+    suspend fun patchRoom(@Url url: String, @Body body: RoomInDto): RoomResponseDto
+
+    @DELETE
+    suspend fun deleteRoom(@Url url: String)
+
+    // --- Assistente do administrador (G3) ---
+
+    @POST
+    suspend fun assistantAsk(
+        @Url url: String,
+        @Body body: AssistantQuestionDto
+    ): AssistantResponseDto
+
+    @POST
+    suspend fun assistantApply(
+        @Url url: String,
+        @Body body: AssistantApplyDto
+    ): AssistantResponseDto
 }

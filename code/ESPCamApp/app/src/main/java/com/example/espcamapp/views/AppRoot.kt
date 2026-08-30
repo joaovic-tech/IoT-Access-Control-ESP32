@@ -21,18 +21,27 @@ import androidx.compose.ui.platform.LocalLayoutDirection
 import com.example.espcamapp.views.components.BottomNavBar
 import com.example.espcamapp.views.components.Tab
 
+/** Destino da tela de pessoa: cadastro novo ou edição de um cadastro existente. */
+private sealed interface PersonForm {
+    data object New : PersonForm
+    data class Edit(val personId: String) : PersonForm
+}
+
 /** Ponto de entrada da UI: controla a aba atual e a navegação para telas de detalhe. */
 @Composable
 fun AppRoot() {
     var currentTab by remember { mutableStateOf(Tab.PRINCIPAL) }
-    var showRegisterPerson by remember { mutableStateOf(false) }
+    // Tela de pessoa: null = fechada, PersonForm.New = cadastro,
+    // PersonForm.Edit = edição de quem já existe.
+    var personForm by remember { mutableStateOf<PersonForm?>(null) }
+    var showAccess by remember { mutableStateOf(false) }
     val snackbarHostState = remember { SnackbarHostState() }
 
     Scaffold(
         containerColor = MaterialTheme.colorScheme.background,
         snackbarHost = { SnackbarHost(snackbarHostState) },
         bottomBar = {
-            if (!showRegisterPerson) {
+            if (personForm == null && !showAccess) {
                 BottomNavBar(current = currentTab, onSelect = { currentTab = it })
             }
         }
@@ -46,16 +55,24 @@ fun AppRoot() {
         )
         Box(modifier = Modifier.fillMaxSize().padding(contentPadding)) {
             when {
-                showRegisterPerson -> RegisterPersonScreen(
+                personForm != null -> RegisterPersonScreen(
                     snackbarHostState = snackbarHostState,
-                    onBack = { showRegisterPerson = false }
+                    personId = (personForm as? PersonForm.Edit)?.personId,
+                    onBack = { personForm = null }
+                )
+
+                showAccess -> AccessScreen(
+                    snackbarHostState = snackbarHostState,
+                    onBack = { showAccess = false }
                 )
 
                 currentTab == Tab.PRINCIPAL -> HomeScreen(snackbarHostState)
                 currentTab == Tab.DISPOSITIVOS -> DevicesScreen(snackbarHostState)
                 currentTab == Tab.PESSOAS -> PeopleScreen(
                     snackbarHostState = snackbarHostState,
-                    onAddPerson = { showRegisterPerson = true }
+                    onAddPerson = { personForm = PersonForm.New },
+                    onEditPerson = { person -> personForm = PersonForm.Edit(person.id) },
+                    onOpenAccess = { showAccess = true }
                 )
             }
         }

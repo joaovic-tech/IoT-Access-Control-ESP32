@@ -2,6 +2,7 @@ package com.example.espcamapp
 
 import com.example.espcamapp.data.model.Device
 import com.example.espcamapp.data.model.DetectionStatus
+import com.example.espcamapp.data.model.Room
 import com.example.espcamapp.data.model.PersonStatus
 import com.example.espcamapp.data.remote.DetectResponseDto
 import com.example.espcamapp.data.remote.DetectedFaceDto
@@ -14,6 +15,7 @@ import com.example.espcamapp.data.settings.SettingsStore
 import kotlinx.serialization.json.Json
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
@@ -55,8 +57,10 @@ class DtoMappersTest {
 
     @Test
     fun `pessoa ativa e pendente conforme o status do servidor`() {
-        val ativo = PersonDto(id = "a1", name = "João", status = "ativo", samples = 3).toDomain()
-        val pendente = PersonDto(id = "b2", name = "Maria", status = "pendente", samples = 1).toDomain()
+        val ativo = PersonDto(id = "a1", name = "João", status = "ativo", samples = 3)
+            .toDomain(SERVER)
+        val pendente = PersonDto(id = "b2", name = "Maria", status = "pendente", samples = 1)
+            .toDomain(SERVER)
 
         assertEquals(PersonStatus.ATIVO, ativo.status)
         assertEquals("Ativo", ativo.status.label)
@@ -65,8 +69,12 @@ class DtoMappersTest {
     }
 
     @Test
-    fun `categoria vazia cai para Visitante`() {
-        assertEquals("Visitante", PersonDto(id = "x", category = "").toDomain().category)
+    fun `miniatura aponta para a primeira amostra e some sem amostras`() {
+        val comAmostras = PersonDto(id = "a1", samples = 3).toDomain("$SERVER/")
+        val semAmostras = PersonDto(id = "b2", samples = 0).toDomain(SERVER)
+
+        assertEquals("$SERVER/people/a1/samples/1", comAmostras.thumbnailUrl)
+        assertNull(semAmostras.thumbnailUrl)
     }
 
     @Test
@@ -97,9 +105,147 @@ class DtoMappersTest {
     fun `deteccao sem pessoa usa rotulo generico`() {
         val desconhecido = DetectionDto(status = "unknown").toDomain("http://s:8000")
         val semRosto = DetectionDto(status = "no_face").toDomain("http://s:8000")
+        val semCadastro = DetectionDto(status = "person_no_face").toDomain("http://s:8000")
 
-        assertEquals("Desconhecido", desconhecido.displayName)
+        assertEquals("Sem cadastro", desconhecido.displayName)
         assertEquals("Sem rosto", semRosto.displayName)
+        assertEquals("Rosto não visível", semCadastro.displayName)
+    }
+
+    @Test
+    fun `presenca sem rosto e distinta de quadro vazio`() {
+        // G2: era o incômodo relatado — aparecia "Sem rosto" mesmo com gente.
+        val alguem = DetectionDto(status = "person_no_face").toDomain(SERVER)
+        val vazio = DetectionDto(status = "no_face").toDomain(SERVER)
+
+        assertEquals(DetectionStatus.PERSON_NO_FACE, alguem.status)
+        assertEquals("Não identificado", alguem.accessLabel)
+        assertEquals("Sem rosto", vazio.accessLabel)
+    }
+
+    @Test
+    fun `foto detectada nega o acesso mesmo com rosto reconhecido`() {
+        // G1: ataque de apresentação (foto impressa/tela).
+        val spoof = DetectionDto(
+            status = "recognized",
+            person = "João",
+            authorized = true,
+            room = "Cozinha",
+            accessAllowed = true,
+            live = false
+        ).toDomain(SERVER)
+
+        assertFalse(spoof.allowedHere)
+        assertEquals("Foto detectada", spoof.accessLabel)
+        assertEquals("Possível foto ou tela, não a pessoa", spoof.wrongRoomWarning)
+    }
+
+    @Test
+    fun `vivacidade desligada nao altera o veredito`() {
+        val normal = DetectionDto(
+            status = "recognized",
+            person = "João",
+            authorized = true,
+            accessAllowed = true,
+            live = null
+        ).toDomain(SERVER)
+
+        assertTrue(normal.allowedHere)
+        assertEquals("Autorizado", normal.accessLabel)
+    }
+
+    @Test
+    fun `deteccao no comodo errado vira nao autorizado com o motivo`() {
+        // Cenario do tasks.md: Antonio reconhecido e autorizado, mas no quarto do Joao.
+        val dto = DetectionDto(
+            status = "recognized",
+            person = "Antonio",
+            authorized = true,
+            room = "Quarto do Joao",
+            accessAllowed = false,
+            accessReason = "Quarto do Joao nao consta nos comodos liberados"
+        )
+
+        val detection = dto.toDomain(SERVER)
+
+        assertFalse(detection.allowedHere)
+        assertEquals("Não autorizado", detection.accessLabel)
+        assertEquals("Antonio", detection.displayName)
+        assertEquals("Não permitido em Quarto do Joao", detection.wrongRoomWarning)
+    }
+
+    @Test
+    fun `deteccao no comodo liberado fica autorizada`() {
+        val detection = DetectionDto(
+            status = "recognized",
+            person = "João",
+            authorized = true,
+            room = "Cozinha",
+            accessAllowed = true
+        ).toDomain(SERVER)
+
+        assertTrue(detection.allowedHere)
+        assertEquals("Autorizado", detection.accessLabel)
+        assertNull(detection.wrongRoomWarning)
+    }
+
+    @Test
+    fun `sem regra de comodo o veredito segue so o cadastro`() {
+        // Compatibilidade: quem nao tem observacao interpretada decide pelo `authorized`.
+        val autorizado = DetectionDto(status = "recognized", person = "João", authorized = true)
+            .toDomain(SERVER)
+        val semAutorizacao = DetectionDto(status = "recognized", person = "Ana", authorized = false)
+            .toDomain(SERVER)
+        val desconhecido = DetectionDto(status = "unknown").toDomain(SERVER)
+        val semRosto = DetectionDto(status = "no_face").toDomain(SERVER)
+
+        assertEquals("Autorizado", autorizado.accessLabel)
+        assertNull(autorizado.wrongRoomWarning)
+        assertEquals("Não autorizado", semAutorizacao.accessLabel)
+        assertEquals("Sem cadastro", desconhecido.accessLabel)
+        assertEquals("Sem rosto", semRosto.accessLabel)
+    }
+
+    @Test
+    fun `categoria e comodos da pessoa vem prontos do servidor`() {
+        // O rotulo e template no servidor, nao texto gerado por modelo.
+        val morador = PersonDto(
+            id = "a1",
+            name = "Joao",
+            category = "Morador",
+            rooms = listOf("r1", "r2"),
+            roomNames = listOf("Cozinha", "Sala"),
+            accessLabel = "Morador: Cozinha, Sala"
+        ).toDomain(SERVER)
+
+        assertEquals("Morador", morador.category)
+        assertEquals(listOf("r1", "r2"), morador.roomIds)
+        assertEquals(listOf("Cozinha", "Sala"), morador.roomNames)
+        assertEquals("Morador: Cozinha, Sala", morador.accessLabel)
+    }
+
+    @Test
+    fun `pessoa sem comodo nao inventa acesso`() {
+        val semAcesso = PersonDto(id = "b2").toDomain(SERVER)
+
+        assertEquals(emptyList<String>(), semAcesso.roomIds)
+        assertEquals("", semAcesso.accessLabel)
+    }
+
+    @Test
+    fun `urls das amostras cobrem todas as fotos cadastradas`() {
+        // A tela de edicao mostra as amostras que ja estao no servidor.
+        val pessoa = PersonDto(id = "a1", samples = 3).toDomain(SERVER)
+
+        assertEquals(
+            listOf(
+                "$SERVER/people/a1/samples/1",
+                "$SERVER/people/a1/samples/2",
+                "$SERVER/people/a1/samples/3"
+            ),
+            pessoa.sampleUrls(SERVER)
+        )
+        assertEquals(emptyList<String>(), PersonDto(id = "b2").toDomain(SERVER).sampleUrls(SERVER))
     }
 
     @Test
@@ -116,8 +262,12 @@ class DtoMappersTest {
             DetectResponseDto(status = "no_face").toDomain().message
         )
         assertEquals(
-            "Rosto não reconhecido",
+            "Rosto detectado, mas sem cadastro",
             DetectResponseDto(status = "unknown").toDomain().message
+        )
+        assertEquals(
+            "Há alguém no quadro, mas o rosto não pôde ser identificado",
+            DetectResponseDto(status = "person_no_face").toDomain().message
         )
     }
 
@@ -156,5 +306,9 @@ class DtoMappersTest {
         assertFalse(original.sameAddressAs(original.copy(host = "192.168.15.93")))
         assertFalse(original.sameAddressAs(original.copy(port = 8080)))
         assertFalse(original.sameAddressAs(original.copy(streamPort = 82)))
+    }
+
+    private companion object {
+        const val SERVER = "http://192.168.15.6:8000"
     }
 }

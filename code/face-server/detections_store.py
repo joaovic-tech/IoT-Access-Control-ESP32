@@ -43,6 +43,12 @@ def save(
     distance: float | None = None,
     source: str = "unknown",
     unlocked: bool = False,
+    room: str = "",
+    room_id: str | None = None,
+    access_allowed: bool | None = None,
+    access_reason: str = "",
+    live: bool | None = None,
+    live_score: float | None = None,
 ) -> dict[str, Any]:
     """Grava imagem + metadados e devolve o registro pronto para a API."""
     DETECTIONS_DIR.mkdir(parents=True, exist_ok=True)
@@ -75,6 +81,14 @@ def save(
         "distance": distance,
         "source": source,
         "unlocked": unlocked,
+        "room": room,
+        "room_id": room_id,
+        # None = nao havia regra de comodo (ou comodo) para avaliar.
+        "access_allowed": access_allowed,
+        "access_reason": access_reason,
+        # None = verificacao de vivacidade desligada.
+        "live": live,
+        "live_score": live_score,
     }
     (DETECTIONS_DIR / f"{candidate}.json").write_text(
         json.dumps(record, ensure_ascii=False, indent=2), encoding="utf-8"

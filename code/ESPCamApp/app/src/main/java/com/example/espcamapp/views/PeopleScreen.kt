@@ -40,11 +40,14 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
+import coil.compose.AsyncImage
 import com.example.espcamapp.data.model.Person
 import com.example.espcamapp.data.model.PersonStatus
 import com.example.espcamapp.ui.theme.DarkGrayCard
@@ -54,6 +57,7 @@ import com.example.espcamapp.views.components.AppTextField
 import com.example.espcamapp.views.components.HeaderBlock
 import com.example.espcamapp.views.components.HeaderDivider
 import com.example.espcamapp.views.components.PillStatus
+import com.example.espcamapp.views.components.OutlinePurpleButton
 import com.example.espcamapp.views.components.PrimaryButton
 import com.example.espcamapp.views.components.ScreenHorizontalPadding
 import com.example.espcamapp.views.components.StatusPill
@@ -65,6 +69,8 @@ import java.util.Locale
 fun PeopleScreen(
     snackbarHostState: SnackbarHostState,
     onAddPerson: () -> Unit,
+    onEditPerson: (Person) -> Unit,
+    onOpenAccess: () -> Unit,
     viewModel: PeopleViewModel = viewModel(factory = PeopleViewModel.Factory)
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
@@ -118,6 +124,11 @@ fun PeopleScreen(
                 )
                 Spacer(Modifier.height(14.dp))
                 PrimaryButton(text = "+ Cadastrar Nova Pessoa", onClick = onAddPerson)
+                Spacer(Modifier.height(8.dp))
+                OutlinePurpleButton(
+                    text = "Cômodos da casa",
+                    onClick = onOpenAccess
+                )
                 Spacer(Modifier.height(4.dp))
             }
         }
@@ -150,6 +161,7 @@ fun PeopleScreen(
         items(state.visiblePeople, key = { it.id }) { person ->
             PersonCard(
                 person = person,
+                onEdit = { onEditPerson(person) },
                 onToggleAuthorized = { viewModel.setAuthorized(person, it) },
                 onCaptureSample = { viewModel.addSampleFromCamera(person) },
                 onRemove = { pendingRemoval = person }
@@ -164,6 +176,7 @@ private val dateFormat = SimpleDateFormat("dd/MM/yyyy", Locale.getDefault())
 @Composable
 private fun PersonCard(
     person: Person,
+    onEdit: () -> Unit,
     onToggleAuthorized: (Boolean) -> Unit,
     onCaptureSample: () -> Unit,
     onRemove: () -> Unit
@@ -178,31 +191,29 @@ private fun PersonCard(
             .padding(14.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
-        Box(
-            modifier = Modifier
-                .size(46.dp)
-                .clip(CircleShape)
-                .background(Brush.linearGradient(listOf(Color(0xFF2A3550), Color(0xFF161E2E)))),
-            contentAlignment = Alignment.Center
-        ) {
-            Icon(
-                Icons.Filled.Person,
-                contentDescription = null,
-                tint = Color.White.copy(alpha = 0.25f),
-                modifier = Modifier.size(26.dp)
-            )
-        }
+        PersonAvatar(person)
         Spacer(Modifier.width(12.dp))
         Column(modifier = Modifier.weight(1f)) {
             Text(person.name, color = OffWhite, fontSize = 15.sp, fontWeight = FontWeight.Bold)
             Spacer(Modifier.height(2.dp))
             Text(
-                "${person.category} · cadastrado em ${person.formattedDate()}",
+                "${person.category.ifBlank { "Sem vínculo" }} · " +
+                    "cadastrado em ${person.formattedDate()}",
                 color = SlateGray,
                 fontSize = 12.sp
             )
             if (!person.authorized) {
                 Text("Sem autorização de acesso", color = SlateGray, fontSize = 11.sp)
+            }
+            // Cômodos liberados, resolvidos pelo servidor.
+            if (person.accessLabel.isNotBlank()) {
+                Text(
+                    person.accessLabel,
+                    color = SlateGray,
+                    fontSize = 11.sp,
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis
+                )
             }
         }
         Column(horizontalAlignment = Alignment.End) {
@@ -222,6 +233,13 @@ private fun PersonCard(
                 Icon(Icons.Filled.MoreVert, contentDescription = "Ações", tint = SlateGray)
             }
             DropdownMenu(expanded = menuOpen, onDismissRequest = { menuOpen = false }) {
+                DropdownMenuItem(
+                    text = { Text("Editar cadastro") },
+                    onClick = {
+                        onEdit()
+                        menuOpen = false
+                    }
+                )
                 DropdownMenuItem(
                     text = {
                         Text(if (person.authorized) "Revogar autorização" else "Autorizar acesso")
@@ -246,6 +264,37 @@ private fun PersonCard(
                     }
                 )
             }
+        }
+    }
+}
+
+/**
+ * Avatar da pessoa: a primeira amostra facial cadastrada. Enquanto não há
+ * amostra (ou enquanto a imagem carrega) fica o ícone genérico sobre o mesmo
+ * gradiente de antes.
+ */
+@Composable
+private fun PersonAvatar(person: Person) {
+    Box(
+        modifier = Modifier
+            .size(46.dp)
+            .clip(CircleShape)
+            .background(Brush.linearGradient(listOf(Color(0xFF2A3550), Color(0xFF161E2E)))),
+        contentAlignment = Alignment.Center
+    ) {
+        Icon(
+            Icons.Filled.Person,
+            contentDescription = null,
+            tint = Color.White.copy(alpha = 0.25f),
+            modifier = Modifier.size(26.dp)
+        )
+        person.thumbnailUrl?.let { url ->
+            AsyncImage(
+                model = url,
+                contentDescription = "Foto de ${person.name}",
+                contentScale = ContentScale.Crop,
+                modifier = Modifier.fillMaxSize()
+            )
         }
     }
 }

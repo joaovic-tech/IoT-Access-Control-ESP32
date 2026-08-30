@@ -262,18 +262,22 @@ private fun InfoBox(text: String) {
 }
 
 /**
- * Miniatura de uma detecção.
+ * Miniatura de uma detecção (design `design-app-mobile/carrosel-rostos.png`).
  *
- * A moldura codifica o resultado do reconhecimento sem precisar ler o texto:
- * verde para rosto reconhecido, vermelha para rosto desconhecido e cinza
- * quando não havia rosto no quadro.
+ * A moldura e a faixa codificam o veredito sem precisar ler o texto: verde
+ * "Autorizado" quando a pessoa é reconhecida, autorizada **e** está num cômodo
+ * liberado; vermelha "Não autorizado" / "Sem cadastro"; âmbar "Não identificado"
+ * quando há alguém no quadro mas o rosto não pôde ser extraído (G2); e cinza
+ * quando não havia ninguém.
  */
 @Composable
 private fun FaceThumb(detection: Detection, modifier: Modifier = Modifier) {
-    val accent = when (detection.status) {
-        DetectionStatus.RECOGNIZED -> StatusGreenOnline
-        DetectionStatus.UNKNOWN -> StatusRedLive
-        DetectionStatus.NO_FACE -> SlateGray
+    val accent = when {
+        detection.status == DetectionStatus.NO_FACE -> SlateGray
+        // Presença sem identificação: é um alerta, mas não uma pessoa negada.
+        detection.status == DetectionStatus.PERSON_NO_FACE -> StatusAmberPending
+        detection.allowedHere -> StatusGreenOnline
+        else -> StatusRedLive
     }
     val shape = RoundedCornerShape(10.dp)
 
@@ -293,9 +297,9 @@ private fun FaceThumb(detection: Detection, modifier: Modifier = Modifier) {
                 contentScale = ContentScale.Crop,
                 modifier = Modifier.fillMaxSize()
             )
-            // Faixa com o nome sobre a foto — a mesma cor da moldura.
+            // Faixa com o veredito sobre a foto — a mesma cor da moldura.
             Text(
-                detection.displayName,
+                detection.accessLabel,
                 color = Color.White,
                 fontSize = 11.sp,
                 fontWeight = FontWeight.SemiBold,
@@ -318,6 +322,18 @@ private fun FaceThumb(detection: Detection, modifier: Modifier = Modifier) {
             maxLines = 1,
             overflow = TextOverflow.Ellipsis
         )
+        // Só aparece quando a regra de cômodo é que barrou: o nome sozinho não
+        // explicaria por que uma pessoa autorizada aparece como não autorizada.
+        detection.wrongRoomWarning?.let { warning ->
+            Text(
+                warning,
+                color = StatusRedLive,
+                fontSize = 10.sp,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+                textAlign = TextAlign.Center
+            )
+        }
         Text(detection.timeLabel, color = SlateGray, fontSize = 10.sp)
     }
 }

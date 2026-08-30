@@ -27,3 +27,12 @@ __pycache__/
 # ==========================================================
 .idea/
 *.iml
+
+# Configuracao/estado desta instalacao do face-server (nao versionar)
+code/face-server/rooms/*.json
+code/face-server/levels/*.json
+# Modelo de vivacidade e amostras de calibracao sao proprios de cada instalacao
+code/face-server/liveness_model.json
+code/face-server/datasets/
+# Saidas geradas pelos experimentos
+code/face-server/tools/tolerance_curve.csv

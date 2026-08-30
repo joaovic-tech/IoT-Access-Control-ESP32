@@ -101,8 +101,10 @@ class HomeViewModel(
         }
         viewModelScope.launch {
             _state.value = _state.value.copy(scanning = true)
-            // A orientação vai junto: o servidor gira o quadro antes de detectar.
-            val result = detectionRepository.scan(device.baseUrl, device.rotationDegrees)
+            // Orientação e cômodo vão junto: o servidor gira o quadro antes de
+            // detectar e confronta o cômodo com a regra de acesso da pessoa.
+            val result =
+                detectionRepository.scan(device.baseUrl, device.rotationDegrees, device.room)
             _state.value = _state.value.copy(
                 scanning = false,
                 message = result.fold({ it.message }, { it.message ?: "Falha ao escanear" })

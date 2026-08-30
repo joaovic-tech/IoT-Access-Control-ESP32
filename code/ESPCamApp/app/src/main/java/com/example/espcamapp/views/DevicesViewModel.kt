@@ -7,6 +7,8 @@ import androidx.lifecycle.viewmodel.viewModelFactory
 import com.example.espcamapp.appContainer
 import com.example.espcamapp.data.model.Device
 import com.example.espcamapp.data.model.DeviceStatus
+import com.example.espcamapp.data.model.Room
+import com.example.espcamapp.data.repo.AccessRepository
 import com.example.espcamapp.data.repo.DeviceRepository
 import com.example.espcamapp.data.repo.PeopleRepository
 import com.example.espcamapp.data.settings.SettingsStore
@@ -28,6 +30,8 @@ data class DevicesUiState(
     val devices: List<Device> = emptyList(),
     val cards: Map<String, DeviceCardState> = emptyMap(),
     val faceServerUrl: String = SettingsStore.DEFAULT_FACE_SERVER_URL,
+    /** Cômodos cadastrados, oferecidos na edição do dispositivo (F12). */
+    val rooms: List<Room> = emptyList(),
     val saving: Boolean = false,
     /** Testando o endereço do servidor de faces (botão "Salvar endereço"). */
     val checkingServer: Boolean = false,
@@ -39,6 +43,7 @@ data class DevicesUiState(
 class DevicesViewModel(
     private val deviceRepository: DeviceRepository,
     private val peopleRepository: PeopleRepository,
+    private val accessRepository: AccessRepository,
     private val settings: SettingsStore
 ) : ViewModel() {
 
@@ -55,6 +60,9 @@ class DevicesViewModel(
         viewModelScope.launch {
             settings.faceServerUrl.collect { url ->
                 _state.value = _state.value.copy(faceServerUrl = url)
+                // A lista de cômodos vive no servidor de faces: se o endereço
+                // muda, ela precisa ser relida.
+                loadRooms()
             }
         }
         viewModelScope.launch {
@@ -163,7 +171,8 @@ class DevicesViewModel(
         host: String,
         portText: String,
         streamPortText: String,
-        rotationDegrees: Int
+        rotationDegrees: Int,
+        room: String
     ) {
         val original = _state.value.editing ?: return
         val fields = parseFields(name, host, portText, streamPortText) ?: return
@@ -172,7 +181,8 @@ class DevicesViewModel(
             host = fields.host,
             port = fields.port,
             streamPort = fields.streamPort,
-            rotationDegrees = Device.normalizeRotation(rotationDegrees)
+            rotationDegrees = Device.normalizeRotation(rotationDegrees),
+            room = room.trim()
         )
 
         viewModelScope.launch {
@@ -268,6 +278,15 @@ class DevicesViewModel(
         return DeviceFields(cleanName, cleanHost, port, streamPort)
     }
 
+    /** Cômodos disponíveis para vincular ao dispositivo (F12). */
+    fun loadRooms() {
+        viewModelScope.launch {
+            accessRepository.rooms().onSuccess { comodos ->
+                _state.value = _state.value.copy(rooms = comodos)
+            }
+        }
+    }
+
     fun consumeMessage() {
         _state.value = _state.value.copy(message = null)
     }
@@ -291,6 +310,7 @@ class DevicesViewModel(
                 DevicesViewModel(
                     container.deviceRepository,
                     container.peopleRepository,
+                    container.accessRepository,
                     container.settings
                 )
             }

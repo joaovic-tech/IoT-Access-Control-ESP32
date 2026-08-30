@@ -30,12 +30,23 @@ class DetectionRepository(
      * `rotationDegrees` é a orientação cadastrada para o dispositivo: o servidor
      * gira o quadro antes de detectar, senão uma câmera invertida nunca acha
      * rosto (o detector do dlib não reconhece rosto de cabeça para baixo).
+     *
+     * `room` é o cômodo vigiado pela câmera: com ele o servidor confronta a
+     * regra de acesso da pessoa e nega quem está no lugar errado.
      */
-    suspend fun scan(esp32Url: String?, rotationDegrees: Int): Result<ScanResult> =
+    suspend fun scan(
+        esp32Url: String?,
+        rotationDegrees: Int,
+        room: String
+    ): Result<ScanResult> =
         apiCall(retries = 0) {
             heavyApi.scan(
                 "${serverUrl()}/scan",
-                ScanRequestDto(esp32Url = esp32Url, rotation = rotationDegrees)
+                ScanRequestDto(
+                    esp32Url = esp32Url,
+                    rotation = rotationDegrees,
+                    room = room
+                )
             ).toDomain()
         }
 }

@@ -28,11 +28,14 @@ def test_sample_files_are_numbered_sequentially():
 
 
 def test_update_and_delete_person():
-    person = people_store.create_person("Carlos", "Visitante")
-    updated = people_store.update_person(person.id, authorized=True, category="Prestador")
+    person = people_store.create_person("Carlos", "Visitante", authorized=False)
+    updated = people_store.update_person(
+        person.id, authorized=True, category="Prestador", rooms=["comodo-1"]
+    )
     assert updated is not None
     assert updated.authorized is True
     assert updated.category == "Prestador"
+    assert updated.rooms == ["comodo-1"]
 
     people_store.add_sample_bytes(person, b"x")
     assert people_store.delete_person(person.id) is True

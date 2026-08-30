@@ -5,6 +5,7 @@ import android.content.Context
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewmodel.CreationExtras
 import com.example.espcamapp.data.remote.Http
+import com.example.espcamapp.data.repo.AccessRepository
 import com.example.espcamapp.data.repo.DetectionRepository
 import com.example.espcamapp.data.repo.DeviceRepository
 import com.example.espcamapp.data.repo.PeopleRepository
@@ -24,6 +25,7 @@ class AppContainer(context: Context) {
     // Cadastro de amostras e reconhecimento passam pelo cliente de timeout longo.
     private val faceServerHeavyApi = Http.faceServerHeavyApi()
 
+    val accessRepository = AccessRepository(faceServerApi, faceServerHeavyApi, settings)
     val deviceRepository = DeviceRepository(esp32Api, settings)
     val peopleRepository = PeopleRepository(faceServerApi, faceServerHeavyApi, settings)
     val detectionRepository = DetectionRepository(faceServerApi, faceServerHeavyApi, settings)

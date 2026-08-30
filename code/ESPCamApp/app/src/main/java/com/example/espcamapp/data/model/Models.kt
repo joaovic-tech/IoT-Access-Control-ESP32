@@ -18,7 +18,13 @@ data class Device(
      * sem mexer no firmware — é só apresentação, o ESP32 segue enviando o
      * quadro na orientação original.
      */
-    val rotationDegrees: Int = ROTATION_NONE
+    val rotationDegrees: Int = ROTATION_NONE,
+    /**
+     * Cômodo vigiado por esta câmera ("Quarto do João", "Cozinha"). Vai junto
+     * no `/scan` para o servidor confrontar as regras de acesso da pessoa
+     * reconhecida. Vazio deixa o servidor usar o `ROOM` do `.env`.
+     */
+    val room: String = ""
 ) {
     /** Base das rotas REST (`/api/status`, `/api/flash`, ...). */
     val baseUrl: String get() = "http://$host:$port"
@@ -81,24 +87,67 @@ enum class PersonStatus { ATIVO, PENDENTE;
     val label: String get() = if (this == ATIVO) "Ativo" else "Pendente"
 }
 
-/** Pessoa cadastrada no servidor de faces. */
+/** Cômodo cadastrado pelo administrador. */
+data class Room(
+    val id: String,
+    val name: String
+)
+
+/**
+ * Pessoa cadastrada no servidor de faces.
+ *
+ * Os campos do cadastro são os da tela `cadastrar-nova-pessoa.png`: amostras,
+ * nome, categoria/vínculo e os cômodos liberados. Os cômodos ficam na própria
+ * pessoa — não há um nível intermediário.
+ */
 data class Person(
     val id: String,
     val name: String,
+    /** Vínculo com a casa: "Morador", "Visitante", "Prestador". */
     val category: String,
+    /** Ids dos cômodos que esta pessoa pode acessar. */
+    val roomIds: List<String>,
+    /** Nomes dos cômodos liberados, já resolvidos pelo servidor. */
+    val roomNames: List<String>,
+    /** Chave mestra do cadastro: `false` bloqueia em qualquer cômodo. */
     val authorized: Boolean,
-    val note: String,
     val samples: Int,
     val status: PersonStatus,
-    val createdAtEpochSeconds: Double
-)
+    val createdAtEpochSeconds: Double,
+    /** Frase pronta vinda do servidor (template, não modelo de linguagem). */
+    val accessLabel: String = "",
+    /**
+     * URL absoluta da primeira amostra facial (`/people/{id}/samples/1`), usada
+     * como miniatura na lista. `null` enquanto a pessoa não tem amostra.
+     */
+    val thumbnailUrl: String? = null
+) {
+    /** URLs das amostras já cadastradas, na ordem em que o servidor as guarda. */
+    fun sampleUrls(serverBaseUrl: String): List<String> =
+        (1..samples).map { "${serverBaseUrl.trimEnd('/')}/people/$id/samples/$it" }
+}
 
 enum class DetectionStatus {
-    RECOGNIZED, UNKNOWN, NO_FACE;
+    /** Rosto reconhecido: bate com alguém cadastrado. */
+    RECOGNIZED,
+
+    /** Rosto detectado, mas ninguém corresponde — pessoa sem cadastro. */
+    UNKNOWN,
+
+    /**
+     * Nenhum rosto extraído, mas os detectores auxiliares acharam alguém no
+     * quadro (perfil, pouca luz, só o corpo). Antes isso virava [NO_FACE] e o
+     * evento sumia do histórico.
+     */
+    PERSON_NO_FACE,
+
+    /** Quadro sem ninguém. */
+    NO_FACE;
 
     companion object {
         fun from(raw: String): DetectionStatus = when (raw.lowercase()) {
             "recognized" -> RECOGNIZED
+            "person_no_face" -> PERSON_NO_FACE
             "no_face" -> NO_FACE
             else -> UNKNOWN
         }
@@ -115,14 +164,61 @@ data class Detection(
     val personName: String,
     val category: String,
     val authorized: Boolean,
-    val source: String
+    val source: String,
+    /** Cômodo onde a câmera flagrou a pessoa. Vazio quando não foi informado. */
+    val room: String = "",
+    /** `null` = não havia regra de cômodo para avaliar; decidiu só o cadastro. */
+    val accessAllowed: Boolean? = null,
+    val accessReason: String = "",
+    /**
+     * Verificação de vivacidade (G1): `false` = provável foto impressa ou tela
+     * mostrada à câmera. `null` = verificação desligada no servidor.
+     */
+    val live: Boolean? = null
 ) {
     /** Rótulo mostrado sob a miniatura. */
     val displayName: String
         get() = when {
             personName.isNotBlank() -> personName
             status == DetectionStatus.NO_FACE -> "Sem rosto"
-            else -> "Desconhecido"
+            status == DetectionStatus.PERSON_NO_FACE -> "Rosto não visível"
+            else -> "Sem cadastro"
+        }
+
+    /**
+     * Rosto reconhecido, pessoa autorizada, cômodo liberado e rosto de gente de
+     * verdade. Qualquer uma das quatro condições falhando nega o acesso.
+     */
+    val allowedHere: Boolean
+        get() = status == DetectionStatus.RECOGNIZED &&
+            authorized &&
+            accessAllowed != false &&
+            live != false
+
+    /** Veredito na faixa da miniatura (design `carrosel-rostos.png`). */
+    val accessLabel: String
+        get() = when {
+            status == DetectionStatus.NO_FACE -> "Sem rosto"
+            // Há alguém, mas não dá para dizer quem: não é "autorizado" nem um
+            // "não autorizado" atribuível a uma pessoa.
+            status == DetectionStatus.PERSON_NO_FACE -> "Não identificado"
+            status == DetectionStatus.UNKNOWN -> "Sem cadastro"
+            live == false -> "Foto detectada"
+            allowedHere -> "Autorizado"
+            else -> "Não autorizado"
+        }
+
+    /**
+     * Aviso exibido quando a pessoa foi reconhecida mas está no cômodo errado —
+     * é o caso que o `authorized` do cadastro sozinho não explicaria.
+     */
+    val wrongRoomWarning: String?
+        get() = when {
+            // Tentativa de fraude vem antes: é a informação mais grave.
+            live == false -> "Possível foto ou tela, não a pessoa"
+            accessAllowed == false && personName.isNotBlank() ->
+                if (room.isNotBlank()) "Não permitido em $room" else "Não permitido neste local"
+            else -> null
         }
 }
 
@@ -136,7 +232,9 @@ data class ScanResult(
     val message: String
         get() = when (status) {
             DetectionStatus.NO_FACE -> "Nenhum rosto encontrado na captura"
-            DetectionStatus.UNKNOWN -> "Rosto não reconhecido"
+            DetectionStatus.PERSON_NO_FACE ->
+                "Há alguém no quadro, mas o rosto não pôde ser identificado"
+            DetectionStatus.UNKNOWN -> "Rosto detectado, mas sem cadastro"
             DetectionStatus.RECOGNIZED -> {
                 val who = names.filter { it.isNotBlank() }.joinToString(", ")
                 if (unlocked) "$who reconhecido — acesso liberado" else "$who reconhecido"

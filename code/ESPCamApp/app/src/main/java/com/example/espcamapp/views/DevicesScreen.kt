@@ -50,6 +50,7 @@ import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.example.espcamapp.data.model.Device
+import com.example.espcamapp.data.model.Room
 import com.example.espcamapp.ui.theme.DarkGrayCard
 import com.example.espcamapp.ui.theme.DarkGrayInput
 import com.example.espcamapp.ui.theme.OffWhite
@@ -62,6 +63,7 @@ import com.example.espcamapp.views.components.OutlinePurpleButton
 import com.example.espcamapp.views.components.PillStatus
 import com.example.espcamapp.views.components.PrimaryButton
 import com.example.espcamapp.views.components.ScreenHorizontalPadding
+import com.example.espcamapp.views.components.SelectableChips
 import com.example.espcamapp.views.components.SectionTitle
 import com.example.espcamapp.views.components.StatusPill
 
@@ -84,10 +86,11 @@ fun DevicesScreen(
     state.editing?.let { device ->
         EditDeviceDialog(
             device = device,
+            rooms = state.rooms,
             saving = state.saving,
             onDismiss = viewModel::cancelEditing,
-            onConfirm = { name, host, port, streamPort, rotation ->
-                viewModel.saveEditing(name, host, port, streamPort, rotation)
+            onConfirm = { name, host, port, streamPort, rotation, room ->
+                viewModel.saveEditing(name, host, port, streamPort, rotation, room)
             }
         )
     }
@@ -213,15 +216,24 @@ fun DevicesScreen(
 @Composable
 private fun EditDeviceDialog(
     device: Device,
+    rooms: List<Room>,
     saving: Boolean,
     onDismiss: () -> Unit,
-    onConfirm: (name: String, host: String, port: String, streamPort: String, rotation: Int) -> Unit
+    onConfirm: (
+        name: String,
+        host: String,
+        port: String,
+        streamPort: String,
+        rotation: Int,
+        room: String
+    ) -> Unit
 ) {
     var nome by remember(device.id) { mutableStateOf(device.name) }
     var ip by remember(device.id) { mutableStateOf(device.host) }
     var porta by remember(device.id) { mutableStateOf(device.port.toString()) }
     var portaStream by remember(device.id) { mutableStateOf(device.streamPort.toString()) }
     var rotacao by remember(device.id) { mutableIntStateOf(device.rotationDegrees) }
+    var comodo by remember(device.id) { mutableStateOf(device.room) }
 
     AlertDialog(
         onDismissRequest = { if (!saving) onDismiss() },
@@ -240,6 +252,34 @@ private fun EditDeviceDialog(
                     "Porta do stream MJPEG",
                     keyboardType = KeyboardType.Number
                 )
+
+                Spacer(Modifier.height(16.dp))
+                SectionTitle("Cômodo vigiado")
+                Spacer(Modifier.height(4.dp))
+                Text(
+                    "O servidor usa este cômodo para conferir se a pessoa reconhecida " +
+                        "pode estar aqui, segundo a observação do cadastro dela.",
+                    color = SlateGray,
+                    fontSize = 12.sp
+                )
+                Spacer(Modifier.height(10.dp))
+                if (rooms.isEmpty()) {
+                    Text(
+                        "Nenhum cômodo cadastrado ainda — crie em " +
+                            "Pessoas → Cômodos da casa. Enquanto isso, o nome " +
+                            "digitado aqui é casado pelo texto.",
+                        color = SlateGray,
+                        fontSize = 12.sp
+                    )
+                    Spacer(Modifier.height(8.dp))
+                    AppTextField(comodo, { comodo = it }, "Ex: Quarto do João")
+                } else {
+                    SelectableChips(
+                        options = rooms.map { it.name },
+                        selected = comodo,
+                        onSelect = { comodo = it }
+                    )
+                }
 
                 Spacer(Modifier.height(16.dp))
                 SectionTitle("Orientação da imagem")
@@ -270,7 +310,7 @@ private fun EditDeviceDialog(
         confirmButton = {
             TextButton(
                 enabled = !saving,
-                onClick = { onConfirm(nome, ip, porta, portaStream, rotacao) }
+                onClick = { onConfirm(nome, ip, porta, portaStream, rotacao, comodo) }
             ) { Text(if (saving) "Salvando..." else "Salvar") }
         },
         dismissButton = {
@@ -365,6 +405,11 @@ private fun DeviceCard(
             if (detail != null) {
                 Spacer(Modifier.height(8.dp))
                 Text(detail, color = SlateGray, fontSize = 12.sp)
+            }
+
+            if (device.room.isNotBlank()) {
+                Spacer(Modifier.height(4.dp))
+                Text("Cômodo: ${device.room}", color = SlateGray, fontSize = 12.sp)
             }
 
             HorizontalDivider(

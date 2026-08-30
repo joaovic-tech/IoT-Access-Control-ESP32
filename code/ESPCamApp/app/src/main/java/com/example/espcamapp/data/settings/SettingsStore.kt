@@ -25,13 +25,16 @@ private data class DeviceEntry(
     val port: Int,
     val streamPort: Int,
     // Valor padrão: dispositivos gravados antes da orientação existir continuam legíveis.
-    val rotationDegrees: Int = Device.ROTATION_NONE
+    val rotationDegrees: Int = Device.ROTATION_NONE,
+    // Idem para o cômodo, que chegou com as regras de acesso.
+    val room: String = ""
 )
 
 private fun DeviceEntry.toDomain() =
-    Device(id, name, host, port, streamPort, Device.normalizeRotation(rotationDegrees))
+    Device(id, name, host, port, streamPort, Device.normalizeRotation(rotationDegrees), room)
 
-private fun Device.toEntry() = DeviceEntry(id, name, host, port, streamPort, rotationDegrees)
+private fun Device.toEntry() =
+    DeviceEntry(id, name, host, port, streamPort, rotationDegrees, room)
 
 /**
  * Persistência local (DataStore): dispositivos ESP32 cadastrados, dispositivo
@@ -93,7 +96,8 @@ class SettingsStore(private val context: Context) {
         val sanitized = device.copy(
             name = device.name.trim(),
             host = device.host.trim(),
-            rotationDegrees = Device.normalizeRotation(device.rotationDegrees)
+            rotationDegrees = Device.normalizeRotation(device.rotationDegrees),
+            room = device.room.trim()
         )
         context.dataStore.edit { prefs ->
             val updated = decodeDevices(prefs[KEY_DEVICES])

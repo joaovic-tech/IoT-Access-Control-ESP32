@@ -1,4 +1,4 @@
-"""Notificacao opcional via Telegram. Desligada sem token/chat id (tasks.md B9)."""
+"""Notificacao opcional via Telegram. Desligada sem token/chat id."""
 from __future__ import annotations
 
 from pathlib import Path

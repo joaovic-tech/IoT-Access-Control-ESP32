@@ -158,22 +158,37 @@ curl "http://192.168.15.72/api/flash?state=1"
 
 Tabela completa, payloads e exemplos `curl` em
 [`code/face-server/README.md`](code/face-server/README.md#4-contrato-da-api).
-Resumo: `/health`, `/reload`, `/detect`, `/scan`, `/detections`, `/people`
-(GET/POST/PATCH/DELETE), `/people/{id}/samples`, `/enroll/from-esp32` e os
-arquivos estáticos em `/media/detections/`.
+Resumo: `/health`, `/reload`, `/detect`, `/scan`, `/detections`, `/categories`,
+`/people` (GET/POST/PATCH/DELETE), `/people/{id}/samples`, `/enroll/from-esp32`
+e os arquivos estáticos em `/media/detections/`.
 
 `/detect`, `/scan` e `/enroll/from-esp32` aceitam **`rotation`** (0/90/180/270):
 o servidor gira o quadro antes de detectar. Sem o valor na requisição vale o
 `ROTATION` do `.env` — é o caso do firmware no evento do PIR.
 
+`/detect` e `/scan` aceitam também **`room_id`** (ou `room` pelo nome), o cômodo
+vigiado pela câmera. É com ele que o servidor confronta os **cômodos liberados**
+da pessoa (ver §5) e devolve `access_allowed`. Sem o valor na requisição vale o
+`ROOM` do `.env`.
+
+Rotas de configuração: `/rooms` (CRUD), `/categories`, `/assistant/ask` e
+`/assistant/apply`.
+
 ---
 
 ## 5. Fluxos principais
 
-**Cadastro de rosto** — App (*Cadastrar Pessoa*) → escolhe 3–5 fotos da galeria
-ou captura direto pelo ESP32-CAM → `POST /people` (multipart) → servidor grava
-`known_faces/<id>/`, valida um rosto por amostra e recarrega os *encodings* →
-a pessoa aparece como **Ativo** em *Pessoas*.
+**Cadastro de rosto** — App (*Cadastrar Pessoa*) → 3–5 fotos da galeria ou
+captura direto pelo ESP32-CAM, **nome**, **categoria/vínculo** e os **cômodos**
+que a pessoa pode acessar → `POST /people` (multipart) → servidor grava
+`known_faces/<id>/`, valida um rosto por amostra e indexa as amostras novas →
+a pessoa aparece como **Ativo** em *Pessoas*, com a primeira amostra
+(`GET /people/{id}/samples/1`) como miniatura no lugar do ícone genérico.
+
+**Edição do cadastro** — *Pessoas* → menu ⋮ do card → *Editar cadastro* abre a
+mesma tela preenchida (amostras já enviadas, nome, categoria e cômodos
+marcados). Salvar manda `PATCH /people/{id}` e, se houver fotos novas,
+`POST /people/{id}/samples`.
 
 **Reconhecimento** — PIR dispara (ou o usuário toca em *Escanear ambiente*) →
 JPEG chega em `POST /detect` → **o servidor gira o quadro** (ver `rotation` em
@@ -186,6 +201,19 @@ moldura verde e o nome quando reconhecido, vermelha quando desconhecido.
 > estiver montada invertida ou de lado, ajuste a orientação do dispositivo no
 > app **e** o `ROTATION` no `.env` do servidor — sem isso todo scan devolve
 > `no_face`.
+
+**Acesso por cômodo** — o administrador cadastra os **cômodos** da casa e marca,
+na ficha de cada pessoa, em quais ela pode entrar. Na detecção o servidor
+compara o cômodo do dispositivo com essa lista: se ela estiver no lugar errado,
+devolve `access_allowed:false` e o app
+mostra a foto com o nome, a faixa vermelha **"Não autorizado"** e o aviso
+*"Não permitido em &lt;cômodo&gt;"*.
+
+> [!IMPORTANT]
+> A decisão é **determinística**: uma tabela em `access_control.py`, sem nenhum
+> modelo de IA no caminho. A IA atua na **percepção** (reconhecimento facial,
+> vivacidade, presença) e na **interface** (assistente do ADM), nunca na
+> autorização. O porquê está em `tasks.md` §3.
 
 **Liberação de acesso** — rosto `recognized` **e** pessoa `authorized`:
 com `AUTO_UNLOCK=true` o servidor chama `GET /api/unlock` no ESP32 e o relé
@@ -210,8 +238,10 @@ arduino-cli compile --fqbn esp32:esp32:esp32cam code/CameraWebServer
 
 Cobertura atual: pipeline `/detect` (rosto conhecido / desconhecido / sem
 rosto), CRUD de pessoas, `/scan`, `/enroll/from-esp32`, o giro de quadro e o
-histórico no servidor (**38 testes**); mapeadores DTO→domínio, parser MJPEG e
-normalização de orientação no app (**18 unitários + 4 instrumentados**);
+histórico, cômodos, a edição do cadastro, a decisão de acesso, a migração dos
+cadastros antigos, a vivacidade e o assistente no servidor (**97 testes**); mapeadores
+DTO→domínio, veredito de acesso, parser MJPEG e normalização de orientação no
+app (**28 unitários + 4 instrumentados**);
 compilação no firmware.
 
 Os testes instrumentados (`gradlew connectedDebugAndroidTest`) exigem o aparelho
