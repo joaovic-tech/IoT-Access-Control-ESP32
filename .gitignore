@@ -1,10 +1,38 @@
-*skills*
-*AGENT*
-*CLAUDE*
-*GEMINI*
 *.odt
 artigo.md
 .obsidian
-input.md
-output.md
 *.pdf
+
+# ==========================================================
+# Segredos e ambientes locais
+# ==========================================================
+.env
+.venv/
+code/CameraWebServer/arduino_secrets.h
+
+# ==========================================================
+# Servidor de faces: dado biometrico e historico (nao versionar)
+# ==========================================================
+code/face-server/known_faces/*/
+code/face-server/people/*.json
+code/face-server/detections/*
+!code/face-server/detections/.gitkeep
+!code/face-server/known_faces/README.md
+__pycache__/
+*.py[cod]
+.pytest_cache/
+
+# ==========================================================
+# IDE (Android Studio / IntelliJ)
+# ==========================================================
+.idea/
+*.iml
+
+# Configuracao/estado desta instalacao do face-server (nao versionar)
+code/face-server/rooms/*.json
+code/face-server/levels/*.json
+# Modelo de vivacidade e amostras de calibracao sao proprios de cada instalacao
+code/face-server/liveness_model.json
+code/face-server/datasets/
+# Saidas geradas pelos experimentos
+code/face-server/tools/tolerance_curve.csv

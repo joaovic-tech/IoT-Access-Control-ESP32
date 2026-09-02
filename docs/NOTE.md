@@ -151,3 +151,184 @@ No meu código `CameraWebServer.ino` tinhe definido o PIR_PIN como 3 porem como 
 O problema: O GPIO 3 no ESP32-CAM é o pino RX0 (Recepção Serial). Quando eu iniciava a comunicação serial (Serial.begin(115200)), qualquer ruído elétrico na linha serial ou dados chegando pelo cabo USB são interpretados pelo código como "movimento". Isso explica por que ele envia fotos mesmo sem ninguém no quarto.
 
 OBS: Ainda estou tendo problema de latência mas agora estou totalmente pronto para migrar para MQTT.
+
+---
+
+[17/08/2026 - segunda]:
+
+### Nova Abordagem: Transmissão de Vídeo em Tempo Real para App Kotlin
+
+Hoje foi tomada a decisão de reformular a arquitetura do projeto: em vez do fluxo anterior com servidor intermediário, implementaremos uma nova ideia onde o **ESP32-CAM transmite o vídeo em tempo real diretamente para um aplicativo Android desenvolvido em Kotlin**.
+
+O aplicativo móvel funcionará como um **painel de controle (dashboard)**, permitindo:
+1. Visualizar o feed de vídeo ao vivo (stream da câmera) com baixa latência.
+2. Enviar comandos de controle diretamente ao ESP32.
+3. Monitorar o status e eventos do dispositivo.
+
+**Ações realizadas hoje:**
+- Criação da branch dedicada: `feature/esp32cam-stream-kotlin-app`.
+- Limpeza dos códigos legados de dispositivo e servidor para reiniciar o desenvolvimento com uma base limpa e focada nessa nova arquitetura.
+- Planejamento do novo firmware para o ESP32-CAM e da estrutura do aplicativo mobile em Kotlin.
+
+---
+
+[29/08/2026 - sábado]:
+
+### Sistema funcionando de ponta a ponta 🎉
+
+Hoje o projeto saiu do "compila e passa nos testes" para **funcionando no
+hardware real**. Cadastrei meu próprio rosto pelo app, andei pelo ambiente em
+várias posições e o reconhecimento acertou — inclusive com uma segunda pessoa.
+
+Desde o último commit (17/08) o escopo cresceu muito: firmware com PIR + relé,
+servidor Python com OpenCV/dlib e o app Kotlin com 4 telas reais. Mas o dia foi
+gasto quase todo caçando 5 problemas que só aparecem quando tudo roda junto.
+
+### Os 5 problemas que travavam o funcionamento
+
+1. **Smart App Control do Windows 11 bloqueava o `dlib`.**
+   O import quebrava com "uma política de Controle de Aplicativo bloqueou este
+   arquivo". Não era versão de Python nem falta de compilador — era o antivírus
+   do sistema barrando `.pyd` sem assinatura. Precisei desligar o Smart App
+   Control (é **irreversível** sem reinstalar o Windows).
+   Receita que funcionou, sem precisar de Build Tools do Visual Studio:
+   Python 3.12 + `dlib-bin` (wheel pronto) + `face_recognition` com `--no-deps`
+   + `setuptools<81` + `numpy==1.26.4`.
+
+2. **IP errado do servidor.** O app e o firmware apontavam para
+   `192.168.15.10`, mas meu PC é `192.168.15.6`. O erro no app só dizia
+   "não foi possível conectar", sem falar o endereço. Corrigi e fiz o app
+   **mostrar qual endereço falhou** e testar `/health` antes de salvar.
+
+3. **A câmera está montada de cabeça para baixo — e o dlib não detecta rosto
+   invertido.** Esse foi o achado do dia. Todo scan devolvia `no_face` mesmo
+   com pessoas cadastradas. Medi no mesmo quadro:
+
+   | Imagem | Rostos encontrados |
+   | :--- | :---: |
+   | original (como sai da câmera) | **0** |
+   | girada 180° | **1** |
+
+   Solução: o servidor agora **gira o quadro antes de reconhecer**
+   (`rotation` em `/detect`, `/scan` e `/enroll`, com padrão `ROTATION` no
+   `.env` para o fluxo do PIR). A detecção é gravada já girada, então a
+   miniatura no app também sai na posição certa.
+
+4. **Timeout curto abortava o cadastro.** O servidor respondia `201 Created`,
+   mas o app desistia em 8 s enquanto o dlib codificava as amostras — a pessoa
+   era criada e a tela acusava erro. Separei em dois perfis: 8 s para consultas
+   e 90 s para as rotas de visão computacional.
+
+5. **A lista de Pessoas nunca recarregava.** Como o app não usa `NavHost`, o
+   ViewModel fica preso à Activity e o `refresh()` do `init` roda uma única
+   vez. Eu cadastrava alguém e voltava para uma lista vazia. No log do servidor
+   dava para ver: um único `GET /people` no início e nunca mais.
+
+### O que também ganhei hoje no app
+
+- **Editar dispositivo** (nome, IP, portas) — antes só dava para apagar.
+- **Orientação por dispositivo** (0/90/180/270), que gira o vídeo ao vivo e
+  acompanha o reconhecimento no servidor.
+- **Moldura por status** nas detecções: verde com o nome quando reconhece,
+  vermelha "Desconhecido" quando não.
+
+### Anotações para não esquecer
+
+- O `FACE_SERVER_URL` é **compilado no firmware**: se o IP do PC mudar, tenho
+  que regravar a placa. O IP do ESP32 também muda a cada boot (DHCP) —
+  preciso fazer reserva no roteador.
+- A porta 8000 precisa de regra de entrada no firewall do Windows para o
+  celular alcançar o servidor.
+- O ESP32-CAM aceita **um único cliente de stream** por vez.
+- Se eu endireitar a câmera, tenho que zerar a orientação nos **dois** lugares:
+  no dispositivo pelo app e no `ROTATION` do `.env`.
+
+### Testes
+
+| Onde | Situação |
+| :--- | :--- |
+| Firmware | compila limpo — 35% da flash, 22% da RAM |
+| Servidor | 38 testes `pytest` |
+| App | 18 unitários + 4 instrumentados |
+
+horário do termino: 22:49
+
+---
+
+[30/08/2026 - domingo]:
+
+### Cadastro de pessoa: cômodos na ficha, edição e fim da espera
+
+Hoje mexi nos **campos da pessoa** para bater com o design
+`cadastrar-nova-pessoa.png`: foto (amostras), nome, categoria/vínculo e os
+cômodos que ela pode acessar.
+
+### Tirei os níveis de acesso do caminho
+
+Ontem eu tinha criado uma camada de **níveis** ("Morador acessa tudo",
+"Visitante não acessa nada") e cada pessoa recebia um nível. Só que a tela do
+design marca **cômodo por cômodo, na ficha da pessoa** — manter as duas coisas
+seria a mesma regra escrita em dois lugares. Então os cômodos passaram para o
+cadastro da pessoa e o `levels_store` saiu junto com as rotas `/levels` e a
+seção de níveis no app.
+
+Quem já estava cadastrado migra sozinho: o nome do nível vira a categoria e os
+cômodos do nível vão para a pessoa. Testei com o meu próprio cadastro — o
+"Morador" com acesso total voltou como *Morador: Banheiro, Cozinha*. Cadastro
+antigo que só tinha `category` em texto mantém a categoria e fica **sem
+cômodo**, porque migrar para mais permissivo do que estava é o tipo de erro que
+abre porta sozinho.
+
+A chave mestra `authorized` continua existindo, mas fora do formulário (não
+está no design) — ela fica no menu ⋮ da lista de Pessoas.
+
+### Agora dá para editar uma pessoa
+
+Antes, para corrigir um nome eu tinha que apagar e cadastrar de novo, perdendo
+as amostras. *Pessoas* → menu ⋮ → **Editar cadastro** abre a mesma tela já
+preenchida, com as fotos que estão no servidor, o nome, a categoria e os
+cômodos marcados.
+
+### Por que cadastrar/apagar demorava tanto
+
+Eram **duas** causas, e as duas eu medi:
+
+| Causa | O que acontecia | Correção |
+| :--- | :--- | :--- |
+| Reprocessar tudo | toda gravação chamava `load_known_faces()`, que recodifica **todas as amostras de todas as pessoas** | indexar só a amostra nova (`index_sample`) e só remover do índice quem foi apagado (`forget_person`) |
+| Foto em tamanho original | o detector do dlib custa proporcional à área da imagem | reduzir para 1024 px antes de detectar (`MAX_ANALYSIS_WIDTH`) |
+
+Medição do mesmo rosto, mesma foto:
+
+| Largura analisada | Tempo | Rostos encontrados |
+| :--- | :---: | :---: |
+| 2544 px (original do celular) | 7,49 s | 1 |
+| 1024 px | 1,65 s | 1 |
+| 640 px | 1,04 s | 1 |
+
+Resultado com 3 amostras: **cadastro 22,3 s → 5,9 s**, **exclusão ~0,2 s**
+(antes crescia junto com o banco inteiro) e **edição ~0,2 s**. Os frames do
+ESP32 (640×480) já estavam abaixo do limite, então o reconhecimento normal não
+mudou.
+
+### Comparação com o design
+
+Rodei a tela no emulador e comparei com o `.png`. O que estava diferente:
+faltava "Categoria / Vínculo", faltava a lista de cômodos com caixas de
+marcação, sobrava um bloco "Status Autorizado", a grade tinha 5 slots numa
+linha em vez de 4 e o selo de remover a foto estava preto em vez de vermelho.
+Tudo ajustado. Mantive **"Cômodos"** com acento (o design escreve sem).
+
+### Anotações para não esquecer
+
+- Se eu mexer no servidor, **reiniciar o uvicorn**: um processo antigo ainda
+  rodando reescreve o JSON das pessoas no formato velho.
+- Cômodo apagado sai automaticamente da ficha de todo mundo.
+- Pessoa sem nenhum cômodo marcado não entra em lugar nenhum — é de propósito.
+
+### Testes
+
+| Onde | Situação |
+| :--- | :--- |
+| Servidor | 97 testes `pytest` |
+| App | 28 unitários + 4 instrumentados |

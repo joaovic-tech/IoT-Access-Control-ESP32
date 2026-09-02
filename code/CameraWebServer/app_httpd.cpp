@@ -22,6 +22,49 @@
 #include "sdkconfig.h"
 #include "camera_index.h"
 #include "board_config.h"
+#include <WiFi.h>
+#include "iot_access.h"
+#include "face_client.h"
+#include "secrets_config.h"
+
+#ifndef FW_VERSION
+#define FW_VERSION "1.1.0"
+#endif
+
+// Métricas de stream expostas em /api/status (A5).
+static volatile int s_stream_clients = 0;
+static volatile float s_stream_fps = 0.0f;
+
+// Checagem opcional de token (?key=) para rotas de atuadores (A6).
+// Ativa somente quando ACCESS_TOKEN está definido em arduino_secrets.h.
+static bool access_token_ok(httpd_req_t *req) {
+#ifdef ACCESS_TOKEN
+  size_t qlen = httpd_req_get_url_query_len(req) + 1;
+  bool ok = false;
+  if (qlen > 1) {
+    char *buf = (char *)malloc(qlen);
+    if (buf) {
+      if (httpd_req_get_url_query_str(req, buf, qlen) == ESP_OK) {
+        char key[64];
+        if (httpd_query_key_value(buf, "key", key, sizeof(key)) == ESP_OK) {
+          ok = (strcmp(key, ACCESS_TOKEN) == 0);
+        }
+      }
+      free(buf);
+    }
+  }
+  if (!ok) {
+    httpd_resp_set_status(req, "401 Unauthorized");
+    httpd_resp_set_type(req, "application/json");
+    httpd_resp_set_hdr(req, "Access-Control-Allow-Origin", "*");
+    httpd_resp_send(req, "{\"success\":false,\"error\":\"token invalido\"}", HTTPD_RESP_USE_STRLEN);
+  }
+  return ok;
+#else
+  (void)req;
+  return true;
+#endif
+}
 
 #if defined(ARDUINO_ARCH_ESP32) && defined(CONFIG_ARDUHAL_ESP_LOG)
 #include "esp32-hal-log.h"
@@ -90,7 +133,18 @@ static int ra_filter_run(ra_filter_t *filter, int value) {
 #endif
 
 #if defined(LED_GPIO_NUM)
+// Acende/apaga o LED de forma TEMPORARIA (flash da captura, abertura e
+// fechamento do stream). O flash continuo ligado pelo app em /api/flash e
+// persistente e tem prioridade absoluta aqui: sem esta guarda, abrir o stream
+// (tela Principal) reaplicava `led_duty`, que continua 0 enquanto ninguem usa
+// o slider da pagina web -- e o LED que o usuario tinha acabado de ligar na
+// tela Dispositivos apagava sozinho.
 void enable_led(bool en) {  // Turn LED On or Off
+  if (getFlashLedState()) {
+    ledcWrite(LED_GPIO_NUM, getFlashLedDuty());
+    log_i("Flash continuo ligado: LED mantido em %d", getFlashLedDuty());
+    return;
+  }
   int duty = en ? led_duty : 0;
   if (en && isStreaming && (led_duty > CONFIG_LED_MAX_INTENSITY)) {
     duty = CONFIG_LED_MAX_INTENSITY;
@@ -232,8 +286,12 @@ static esp_err_t stream_handler(httpd_req_t *req) {
 
 #if defined(LED_GPIO_NUM)
   isStreaming = true;
-  enable_led(true);
+  if (getFlashLedState()) {
+    enable_led(true);
+  }
 #endif
+
+  s_stream_clients++;
 
   while (true) {
     fb = esp_camera_fb_get();
@@ -284,18 +342,32 @@ static esp_err_t stream_handler(httpd_req_t *req) {
     last_frame = fr_end;
 
     frame_time /= 1000;
+    if (frame_time > 0) {
+      // Média exponencial simples do FPS (exposta em /api/status).
+      float inst_fps = 1000.0f / (float)frame_time;
+      s_stream_fps = (s_stream_fps <= 0.0f) ? inst_fps : (s_stream_fps * 0.9f + inst_fps * 0.1f);
+    }
 #if ARDUHAL_LOG_LEVEL >= ARDUHAL_LOG_LEVEL_INFO
     uint32_t avg_frame_time = ra_filter_run(&ra_filter, frame_time);
-#endif
     log_i(
       "MJPG: %" PRIu32 "B %" PRId32 "ms (%.1ffps), AVG: %" PRIu32 "ms (%.1ffps)", (uint32_t)_jpg_buf_len, (int32_t)frame_time, 1000.0 / frame_time,
       avg_frame_time, 1000.0 / avg_frame_time
     );
+#endif
+  }
+
+  if (s_stream_clients > 0) {
+    s_stream_clients--;
+  }
+  if (s_stream_clients == 0) {
+    s_stream_fps = 0.0f;
   }
 
 #if defined(LED_GPIO_NUM)
   isStreaming = false;
-  enable_led(false);
+  if (!getFlashLedState()) {
+    enable_led(false);
+  }
 #endif
 
   return res;
@@ -396,7 +468,12 @@ static esp_err_t cmd_handler(httpd_req_t *req) {
 #if defined(LED_GPIO_NUM)
   else if (!strcmp(variable, "led_intensity")) {
     led_duty = val;
-    if (isStreaming) {
+    if (getFlashLedState()) {
+      // Flash continuo aceso: o slider muda o brilho do estado persistente,
+      // senao enable_led() abaixo o ignoraria e o novo valor nao apareceria.
+      // Brilho 0 no slider equivale a desligar o flash.
+      setFlashLed(val > 0, val);
+    } else if (isStreaming) {
       enable_led(true);
     }
   }
@@ -492,6 +569,149 @@ static esp_err_t status_handler(httpd_req_t *req) {
   httpd_resp_set_type(req, "application/json");
   httpd_resp_set_hdr(req, "Access-Control-Allow-Origin", "*");
   return httpd_resp_send(req, json_response, strlen(json_response));
+}
+
+static esp_err_t api_status_handler(httpd_req_t *req) {
+  char json_response[640];
+  sensor_t *s = esp_camera_sensor_get();
+  int framesize = s ? (int)s->status.framesize : -1;
+  int quality = s ? (int)s->status.quality : -1;
+
+  snprintf(
+    json_response, sizeof(json_response),
+    "{\"status\":\"online\",\"fw\":\"%s\",\"ip\":\"%s\",\"rssi\":%d,\"uptime_s\":%u,"
+    "\"flash\":%s,\"flash_duty\":%d,\"relay\":%s,\"pir\":%s,\"pir_count\":%u,"
+    "\"free_heap\":%u,\"free_psram\":%u,\"has_psram\":%s,"
+    "\"framesize\":%d,\"quality\":%d,\"fps\":%.1f,\"stream_clients\":%d,"
+    "\"detect_busy\":%s,\"detect_last_status\":%d}",
+    FW_VERSION,
+    WiFi.localIP().toString().c_str(),
+    getWifiRssi(),
+    getUptimeSeconds(),
+    getFlashLedState() ? "true" : "false",
+    getFlashLedDuty(),
+    getRelayState() ? "true" : "false",
+    getPirState() ? "true" : "false",
+    getPirCount(),
+    (uint32_t)ESP.getFreeHeap(),
+    (uint32_t)ESP.getFreePsram(),
+    psramFound() ? "true" : "false",
+    framesize,
+    quality,
+    (double)s_stream_fps,
+    s_stream_clients,
+    faceClientBusy() ? "true" : "false",
+    faceClientLastStatus()
+  );
+
+  httpd_resp_set_type(req, "application/json");
+  httpd_resp_set_hdr(req, "Access-Control-Allow-Origin", "*");
+  return httpd_resp_send(req, json_response, strlen(json_response));
+}
+
+static esp_err_t api_flash_handler(httpd_req_t *req) {
+  if (!access_token_ok(req)) return ESP_OK;
+  size_t query_len = httpd_req_get_url_query_len(req) + 1;
+  int state = -1;
+  int duty = -1;
+
+  if (query_len > 1) {
+    char *buf = (char *)malloc(query_len);
+    if (buf) {
+      if (httpd_req_get_url_query_str(req, buf, query_len) == ESP_OK) {
+        char val_str[16];
+        if (httpd_query_key_value(buf, "state", val_str, sizeof(val_str)) == ESP_OK) {
+          state = atoi(val_str);
+        }
+        if (httpd_query_key_value(buf, "duty", val_str, sizeof(val_str)) == ESP_OK ||
+            httpd_query_key_value(buf, "val", val_str, sizeof(val_str)) == ESP_OK) {
+          duty = atoi(val_str);
+        }
+      }
+      free(buf);
+    }
+  }
+
+  if (state == 1 || duty > 0) {
+    setFlashLed(true, (duty > 0) ? duty : 255);
+  } else if (state == 0 || duty == 0) {
+    setFlashLed(false, 0);
+  } else {
+    setFlashLed(!getFlashLedState(), 255);
+  }
+
+  char json[128];
+  snprintf(json, sizeof(json), "{\"success\":true,\"flash\":%s,\"duty\":%d}",
+    getFlashLedState() ? "true" : "false", getFlashLedDuty());
+
+  httpd_resp_set_type(req, "application/json");
+  httpd_resp_set_hdr(req, "Access-Control-Allow-Origin", "*");
+  return httpd_resp_send(req, json, strlen(json));
+}
+
+static esp_err_t api_relay_handler(httpd_req_t *req) {
+  if (!access_token_ok(req)) return ESP_OK;
+  size_t query_len = httpd_req_get_url_query_len(req) + 1;
+  int state = -1;
+  int pulse = 0;
+
+  if (query_len > 1) {
+    char *buf = (char *)malloc(query_len);
+    if (buf) {
+      if (httpd_req_get_url_query_str(req, buf, query_len) == ESP_OK) {
+        char val_str[16];
+        if (httpd_query_key_value(buf, "state", val_str, sizeof(val_str)) == ESP_OK) {
+          state = atoi(val_str);
+        }
+        if (httpd_query_key_value(buf, "pulse", val_str, sizeof(val_str)) == ESP_OK ||
+            httpd_query_key_value(buf, "duration", val_str, sizeof(val_str)) == ESP_OK) {
+          pulse = atoi(val_str);
+        }
+      }
+      free(buf);
+    }
+  }
+
+  if (pulse > 0) {
+    triggerRelay((uint32_t)pulse);
+  } else if (state == 1) {
+    setRelay(true);
+  } else if (state == 0) {
+    setRelay(false);
+  } else {
+    setRelay(!getRelayState());
+  }
+
+  char json[128];
+  snprintf(json, sizeof(json), "{\"success\":true,\"relay\":%s}",
+    getRelayState() ? "true" : "false");
+
+  httpd_resp_set_type(req, "application/json");
+  httpd_resp_set_hdr(req, "Access-Control-Allow-Origin", "*");
+  return httpd_resp_send(req, json, strlen(json));
+}
+
+static esp_err_t api_unlock_handler(httpd_req_t *req) {
+  if (!access_token_ok(req)) return ESP_OK;
+  triggerRelay(3000);
+  const char *json = "{\"success\":true,\"message\":\"Trava liberada por 3000ms\",\"relay\":true}";
+  httpd_resp_set_type(req, "application/json");
+  httpd_resp_set_hdr(req, "Access-Control-Allow-Origin", "*");
+  return httpd_resp_send(req, json, strlen(json));
+}
+
+// A4: disparo manual da deteccao facial pelo app. Enfileira captura + POST /detect.
+static esp_err_t api_scan_handler(httpd_req_t *req) {
+  bool queued = faceClientRequestDetection("scan");
+  char json[96];
+  snprintf(json, sizeof(json),
+    "{\"queued\":%s,\"busy\":%s,\"last_status\":%d}",
+    queued ? "true" : "false",
+    faceClientBusy() ? "true" : "false",
+    faceClientLastStatus());
+  httpd_resp_set_type(req, "application/json");
+  httpd_resp_set_hdr(req, "Access-Control-Allow-Origin", "*");
+  return httpd_resp_send(req, json, strlen(json));
 }
 
 static esp_err_t xclk_handler(httpd_req_t *req) {
@@ -674,7 +894,70 @@ static esp_err_t index_handler(httpd_req_t *req) {
 
 void startCameraServer() {
   httpd_config_t config = HTTPD_DEFAULT_CONFIG();
-  config.max_uri_handlers = 16;
+  config.max_uri_handlers = 24;
+
+  httpd_uri_t api_status_uri = {
+    .uri = "/api/status",
+    .method = HTTP_GET,
+    .handler = api_status_handler,
+    .user_ctx = NULL
+  };
+
+  httpd_uri_t api_flash_uri = {
+    .uri = "/api/flash",
+    .method = HTTP_GET,
+    .handler = api_flash_handler,
+    .user_ctx = NULL
+  };
+
+  httpd_uri_t flash_uri = {
+    .uri = "/flash",
+    .method = HTTP_GET,
+    .handler = api_flash_handler,
+    .user_ctx = NULL
+  };
+
+  httpd_uri_t api_relay_uri = {
+    .uri = "/api/relay",
+    .method = HTTP_GET,
+    .handler = api_relay_handler,
+    .user_ctx = NULL
+  };
+
+  httpd_uri_t relay_uri = {
+    .uri = "/relay",
+    .method = HTTP_GET,
+    .handler = api_relay_handler,
+    .user_ctx = NULL
+  };
+
+  httpd_uri_t api_unlock_uri = {
+    .uri = "/api/unlock",
+    .method = HTTP_GET,
+    .handler = api_unlock_handler,
+    .user_ctx = NULL
+  };
+
+  httpd_uri_t api_scan_uri = {
+    .uri = "/api/scan",
+    .method = HTTP_GET,
+    .handler = api_scan_handler,
+    .user_ctx = NULL
+  };
+
+  httpd_uri_t scan_uri = {
+    .uri = "/scan",
+    .method = HTTP_GET,
+    .handler = api_scan_handler,
+    .user_ctx = NULL
+  };
+
+  httpd_uri_t unlock_uri = {
+    .uri = "/unlock",
+    .method = HTTP_GET,
+    .handler = api_unlock_handler,
+    .user_ctx = NULL
+  };
 
   httpd_uri_t index_uri = {
     .uri = "/",
@@ -824,8 +1107,17 @@ void startCameraServer() {
   log_i("Starting web server on port: '%u'", config.server_port);
   if (httpd_start(&camera_httpd, &config) == ESP_OK) {
     httpd_register_uri_handler(camera_httpd, &index_uri);
-    httpd_register_uri_handler(camera_httpd, &cmd_uri);
     httpd_register_uri_handler(camera_httpd, &status_uri);
+    httpd_register_uri_handler(camera_httpd, &api_status_uri);
+    httpd_register_uri_handler(camera_httpd, &api_flash_uri);
+    httpd_register_uri_handler(camera_httpd, &flash_uri);
+    httpd_register_uri_handler(camera_httpd, &api_relay_uri);
+    httpd_register_uri_handler(camera_httpd, &relay_uri);
+    httpd_register_uri_handler(camera_httpd, &api_unlock_uri);
+    httpd_register_uri_handler(camera_httpd, &unlock_uri);
+    httpd_register_uri_handler(camera_httpd, &api_scan_uri);
+    httpd_register_uri_handler(camera_httpd, &scan_uri);
+    httpd_register_uri_handler(camera_httpd, &cmd_uri);
     httpd_register_uri_handler(camera_httpd, &capture_uri);
     httpd_register_uri_handler(camera_httpd, &bmp_uri);
 
