@@ -1,8 +1,0 @@
-# Segredos reais do dispositivo -- nunca versionar (ver arduino_secrets.h.example)
-arduino_secrets.h
-
-# Artefatos de build do arduino-cli
-/build/
-*.bin
-*.elf
-*.map
